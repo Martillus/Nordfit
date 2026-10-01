@@ -273,6 +273,9 @@
   const introQueue = [];
   function initMotion() {
     if (reduced) return;
+    // Primero los pines de cada página (hero), en orden de aparición: así los
+    // ScrollTrigger de más abajo cuentan con su espacio y no entran de golpe
+    (window.NF_PAGE || []).forEach(fn => fn({ gsap, ST, EASE, splitChars, splitLines, splitWords, lenis, fine }));
 
     // Titulares por líneas
     document.querySelectorAll('[data-split="lines"]').forEach(el => {
@@ -401,7 +404,7 @@
       if (!track || window.innerWidth < 900) return;
       const dist = () => track.scrollWidth - window.innerWidth;
       const tween = gsap.to(track, { x: () => -dist(), ease: 'none',
-        scrollTrigger: { trigger: sec, start: 'top top', end: () => '+=' + dist(), pin: true, scrub: 1, invalidateOnRefresh: true } });
+        scrollTrigger: { trigger: sec, start: 'top top', end: () => '+=' + dist(), pin: true, scrub: .5, anticipatePin: 1, invalidateOnRefresh: true } });
       sec.querySelectorAll('.hs__card .ph, .hs__card img').forEach(m => {
         gsap.fromTo(m, { scale: 1.25 }, { scale: 1, ease: 'none', scrollTrigger: { trigger: m.closest('.hs__card'), containerAnimation: tween, start: 'left right', end: 'center center', scrub: true } });
       });
@@ -451,8 +454,6 @@
       });
     }
 
-    // Hooks específicos por página
-    (window.NF_PAGE || []).forEach(fn => fn({ gsap, ST, EASE, splitChars, splitLines, splitWords, lenis, fine }));
   }
 
   const fontsReady = document.fonts?.ready || Promise.resolve();
@@ -461,6 +462,7 @@
     window.scrollTo(0, 0);
     runLoader().then(() => {
       lenis?.start();
+      ST.sort();
       ST.refresh();
       introQueue.forEach((tw, i) => gsap.delayedCall(i * .08, () => tw.play()));
       document.dispatchEvent(new CustomEvent('nf:ready'));
