@@ -1,0 +1,90 @@
+<!--{"key":"contacto","title":"Contacto · Nordfit Madrid","desc":"Reserva tu valoración inicial en Nordfit. C. de San Nazario, 1, Chamartín, 28002 Madrid. Teléfono y WhatsApp: 687 38 69 17."}-->
+<section class="contact-hero">
+  <div class="contact-hero__text" data-intro>
+    <h1 class="display phero__title" data-split="lines">Habla <span class="thin">con nosotros</span></h1>
+    <p class="lead" data-reveal>Cuéntanos qué buscas y te proponemos un horario para tu valoración inicial. Respondemos por teléfono o WhatsApp.</p>
+    <dl class="contact-lines" data-reveal>
+      <div><dt>Teléfono</dt><dd>687 38 69 17</dd><button class="chip-btn" type="button" data-copy="687 38 69 17">Copiar</button></div>
+      <div><dt>WhatsApp</dt><dd>+34 687 38 69 17</dd><a class="chip-btn" href="https://wa.me/34687386917" target="_blank" rel="noopener">Abrir chat</a></div>
+      <div><dt>Dirección</dt><dd>C. de San Nazario, 1, 28002 Madrid</dd><a class="chip-btn" href="https://www.google.com/maps/search/?api=1&query=Nordfit+C.+de+San+Nazario+1+Madrid" target="_blank" rel="noopener">Cómo llegar</a></div>
+    </dl>
+  </div>
+  <div class="contact-hero__media" data-peak>
+    <img data-parallax="8" src="assets/img/fachada-nordfit.jpg" alt="Rótulo metálico de Nordfit, Entrenamiento personal, sobre la entrada del estudio" width="1181" height="2000">
+  </div>
+</section>
+
+<section class="section light" id="reserva" aria-labelledby="reserva-title">
+  <div class="wrap booking">
+    <div class="booking__head">
+      <h2 id="reserva-title" class="display h-lg" data-split="lines">Reserva tu <span class="thin">valoración</span></h2>
+      <p class="lead" data-reveal>Rellena el formulario y te escribimos para cerrar día y hora. La primera sesión sirve para conocernos y diseñar tu plan.</p>
+    </div>
+    <div>
+      <form class="form" data-form novalidate>
+        <div class="field field--half"><label for="f-name">Nombre</label><input id="f-name" name="nombre" autocomplete="given-name" required><span class="field__err">Escribe tu nombre.</span></div>
+        <div class="field field--half"><label for="f-phone">Teléfono</label><input id="f-phone" name="telefono" type="tel" autocomplete="tel" inputmode="tel" required pattern="[0-9 +]{9,}"><span class="field__err">Escribe un teléfono de al menos 9 cifras.</span></div>
+        <div class="field"><label for="f-mail">Email</label><input id="f-mail" name="email" type="email" autocomplete="email" required spellcheck="false"><span class="field__err">Escribe un email válido, por ejemplo nombre@correo.com.</span></div>
+        <fieldset class="field field--choices">
+          <legend>¿Qué formato te interesa?</legend>
+          <div class="choices">
+            <input type="radio" name="formato" id="fo-1" value="1:1" checked><label for="fo-1">Personal 1:1</label>
+            <input type="radio" name="formato" id="fo-2" value="pareja"><label for="fo-2">En pareja</label>
+            <input type="radio" name="formato" id="fo-3" value="grupo"><label for="fo-3">Grupo reducido</label>
+            <input type="radio" name="formato" id="fo-4" value="nose"><label for="fo-4">Aún no lo sé</label>
+          </div>
+        </fieldset>
+        <div class="field field--half"><label for="f-when">Mejor franja</label>
+          <select id="f-when" name="franja"><option>Mañana</option><option>Mediodía</option><option>Tarde</option><option>Noche (hasta 22:00)</option></select></div>
+        <div class="field field--half"><label for="f-goal">Objetivo principal</label>
+          <select id="f-goal" name="objetivo"><option>Ganar fuerza</option><option>Perder grasa</option><option>Moverme mejor</option><option>Volver tras una lesión</option><option>Otro</option></select></div>
+        <div class="field"><label for="f-msg">Cuéntanos algo más (opcional)</label><textarea id="f-msg" name="mensaje"></textarea></div>
+        <div class="field field--check"><input type="checkbox" id="f-ok" required><label for="f-ok">Acepto que Nordfit use estos datos para contactarme sobre mi reserva.</label><span class="field__err">Necesitamos tu permiso para contactarte.</span></div>
+        <button class="btn btn--dark" type="submit" data-magnetic=".3"><span class="roll"><span>Enviar solicitud</span><span aria-hidden="true">Enviar solicitud</span></span><span class="ico">{{ARROW}}</span></button>
+      </form>
+      <div class="form-done" hidden>
+        <h3 class="display">Solicitud <span class="thin">enviada</span></h3>
+        <p class="lead">Gracias. Te escribiremos en breve para cerrar el día de tu valoración. Si lo prefieres, llámanos al 687 38 69 17.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" aria-labelledby="donde">
+  <div class="wrap map-card">
+    <div class="map-art" data-expand="inset(8% 8% 8% 8% round 24px)">
+      <svg viewBox="0 0 800 550" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+        <rect width="800" height="550" fill="#161d28"/>
+        <g stroke="#232d3b" stroke-width="22" fill="none" stroke-linecap="round">
+          <path d="M-20 140 L820 90"/><path d="M-20 330 L820 300"/><path d="M-20 470 L820 500"/>
+          <path d="M150 -20 L210 570"/><path d="M420 -20 L380 570"/><path d="M650 -20 L700 570"/>
+        </g>
+        <g stroke="#1e2734" stroke-width="9" fill="none">
+          <path d="M-20 220 L820 200"/><path d="M-20 410 L820 395"/><path d="M290 -20 L300 570"/><path d="M540 -20 L520 570"/><path d="M0 0 L800 550"/>
+        </g>
+        <g fill="#8b95a3" font-family="Manrope, sans-serif" font-size="13" opacity=".7">
+          <text x="440" y="292" transform="rotate(-2 440 292)">C. de San Nazario</text>
+          <text x="60" y="130" transform="rotate(-3 60 130)">C. de López de Hoyos</text>
+          <text x="610" y="60">Prosperidad</text>
+        </g>
+      </svg>
+      <div class="pin"><div class="pin__mark">{{mark()}}</div><span>Nordfit · San Nazario, 1</span></div>
+    </div>
+    <div class="map-info">
+      <h2 id="donde" class="display h-md" data-split="lines">Dónde <span class="thin">estamos</span></h2>
+      <p class="muted" data-reveal>C. de San Nazario, 1, Chamartín, 28002 Madrid. Código Plus: C8XM+82.</p>
+      <table class="hours" data-reveal>
+        <caption class="sr-only">Horario</caption>
+        <tbody>
+          <tr data-days="1,2,3,4,5"><th scope="row">Lunes a viernes</th><td>07:00 – 22:00</td></tr>
+          <tr data-days="6"><th scope="row">Sábado</th><td>09:00 – 14:00</td></tr>
+          <tr data-days="0"><th scope="row">Domingo</th><td>Cerrado</td></tr>
+        </tbody>
+      </table>
+      <div data-reveal>{{btn('https://www.google.com/maps/search/?api=1&query=Nordfit+C.+de+San+Nazario+1+Madrid', 'Abrir en Google Maps', 'btn--ghost', 'target="_blank" rel="noopener"')}}</div>
+    </div>
+  </div>
+</section>
+<script>
+  (function () { var d = new Date().getDay(); document.querySelectorAll('.hours tr[data-days]').forEach(function (r) { if (r.dataset.days.split(',').indexOf(String(d)) > -1) r.classList.add('is-today'); }); })();
+</script>
