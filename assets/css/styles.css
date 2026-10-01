@@ -40,6 +40,8 @@
 html { -webkit-text-size-adjust: 100%; overflow-x: clip; }
 html.lenis, html.lenis body { height: auto; }
 .lenis.lenis-smooth { scroll-behavior: auto !important; }
+.lenis.lenis-stopped { overflow: hidden; }
+.lenis.lenis-smooth [data-lenis-prevent] { overscroll-behavior: contain; }
 body {
   margin: 0;
   background: var(--night);
@@ -108,7 +110,7 @@ p { margin: 0; max-width: 62ch; }
   padding: 1.05em 1.6em 1.05em 1.8em; border-radius: 999px; overflow: hidden; isolation: isolate;
   background: var(--bg); color: var(--fg);
   font-family: var(--f-display); font-weight: 700; font-size: .95rem; letter-spacing: .01em;
-  transition: transform .4s var(--ease-out), color .4s var(--ease-out);
+  transition: color .4s var(--ease-out);
   will-change: transform;
 }
 .btn::before {
@@ -117,7 +119,7 @@ p { margin: 0; max-width: 62ch; }
   transition: clip-path .55s var(--ease-io);
 }
 .btn:hover::before { clip-path: polygon(50% -60%, 100% 0%, 100% 100%, 0% 100%, 0% 0%); }
-.btn:active { transform: scale(.97); }
+.btn:active .roll, .btn:active .ico { scale: .96; }
 .btn .roll { position: relative; display: inline-block; overflow: hidden; height: 1.25em; line-height: 1.25em; }
 .btn .roll span { display: block; transition: transform .5s var(--ease-out); }
 .btn .roll span + span { position: absolute; left: 0; top: 100%; }
@@ -287,3 +289,8 @@ html.no-js .loader { display: none; }
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
   .loader { display: none; }
 }
+
+[data-count] { font-variant-numeric: tabular-nums; }
+
+[data-count] { font-variant-numeric: tabular-nums; }
+.line-mask > span { backface-visibility: hidden; }

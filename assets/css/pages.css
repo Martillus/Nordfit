@@ -19,7 +19,7 @@
 .hero__word {
   position: absolute; top: 45%; transform: translateY(-50%);
   font-size: clamp(4rem, 12vw, 14rem); color: var(--silver); mix-blend-mode: difference; pointer-events: none;
-  line-height: .8;
+  line-height: .8; will-change: transform;
 }
 .hero__word--l { right: calc(50% + 6vw); }
 .hero__word--r { left: calc(50% + 6vw); }
@@ -88,8 +88,8 @@
   width: clamp(260px, 26vw, 380px); flex-shrink: 0; display: grid; align-content: space-between; gap: 40px;
   padding: 36px; border-radius: 4px; background: var(--silver); color: var(--night); position: relative; overflow: hidden; isolation: isolate;
 }
-.hs__end::before { content: ""; position: absolute; inset: 0; background: var(--oak); z-index: -1; clip-path: polygon(50% 100%, 50% 100%, 100% 100%, 0 100%); transition: clip-path .8s var(--ease-io); }
-.hs__end:hover::before { clip-path: polygon(50% -40%, 100% 0, 100% 100%, 0 100%); }
+.hs__end::before { content: ""; position: absolute; inset: 0; background: var(--oak); z-index: -1; clip-path: polygon(50% 100%, 100% 100%, 100% 100%, 0% 100%, 0% 100%); transition: clip-path .8s var(--ease-io); }
+.hs__end:hover::before { clip-path: polygon(50% -50%, 100% 0%, 100% 100%, 0% 100%, 0% 0%); }
 .hs__end .display { font-size: clamp(1.8rem, 1rem + 1.8vw, 3rem); }
 .hs__endico { width: 64px; height: 64px; border-radius: 50%; background: var(--night); color: var(--silver); display: grid; place-items: center; transition: transform .6s var(--ease-out); }
 .hs__endico svg { width: 22px; }
@@ -153,8 +153,7 @@
 .names__n { font-size: clamp(2.6rem, 1rem + 7vw, 8rem); line-height: .95; transition: transform .7s var(--ease-out), color .4s; }
 .names a:hover .names__n { transform: translateX(clamp(12px, 2vw, 32px)); color: var(--paper); }
 .names__r { color: var(--steel); font-size: .92rem; text-align: right; }
-.hover-fig { position: absolute; left: 0; top: 0; width: clamp(220px, 20vw, 300px); aspect-ratio: 3 / 4; pointer-events: none; z-index: 3; opacity: 0; transform: scale(.6); margin: -50% 0 0 -50%; translate: -50% -50%; }
-.hover-fig { margin: 0; }
+.hover-fig { position: absolute; left: 0; top: 0; width: clamp(220px, 20vw, 300px); aspect-ratio: 3 / 4; pointer-events: none; z-index: 3; opacity: 0; transform: scale(.6); translate: -50% -50%; will-change: transform; }
 .hover-fig__item { position: absolute; inset: 0; opacity: 0; transition: opacity .35s; border-radius: 4px; overflow: hidden; }
 .hover-fig__item.is-on { opacity: 1; }
 .hover-fig__item .ph { height: 100%; min-height: 0; }
@@ -192,8 +191,8 @@
 /* Para quién */
 .who { display: grid; gap: 2px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); margin-top: 56px; }
 .who__item { position: relative; padding: 40px 32px 36px; background: #dcdee1; display: grid; gap: 14px; min-height: 280px; align-content: end; overflow: hidden; }
-.who__item::before { content: ""; position: absolute; inset: 0; background: var(--graphite); clip-path: polygon(50% 100%, 50% 100%, 100% 100%, 0 100%); transition: clip-path .8s var(--ease-io); }
-.who__item:hover::before { clip-path: polygon(50% -50%, 100% 0, 100% 100%, 0 100%); }
+.who__item::before { content: ""; position: absolute; inset: 0; background: var(--graphite); clip-path: polygon(50% 100%, 100% 100%, 100% 100%, 0% 100%, 0% 100%); transition: clip-path .8s var(--ease-io); }
+.who__item:hover::before { clip-path: polygon(50% -50%, 100% 0%, 100% 100%, 0% 100%, 0% 0%); }
 .who__item > * { position: relative; transition: color .5s; }
 .who__item:hover > * { color: var(--paper); }
 .who__item h3 { font-size: var(--step-2); }

@@ -237,12 +237,13 @@
       document.querySelectorAll('[data-price]').forEach(p => {
         const target = parseFloat(p.dataset[mode]);
         const obj = { v: parseFloat(p.textContent) || 0 };
-        gsap.to(obj, { v: target, duration: .8, ease: 'power3.out', onUpdate: () => { p.textContent = Math.round(obj.v); } });
+        gsap.to(obj, { v: target, duration: obj.v === 0 ? 2 : .8, ease: 'power3.out', onUpdate: () => { p.textContent = Math.round(obj.v); } });
       });
       document.querySelectorAll('[data-unit]').forEach(u => { u.textContent = u.dataset[mode]; });
     };
     opts.forEach(o => o.addEventListener('click', () => set(o)));
-    requestAnimationFrame(() => set(opts[0]));
+    ST.create({ trigger: document.querySelector('.plans') || toggle, start: 'top 85%', once: true, onEnter: () => set(opts[0]) });
+    document.querySelectorAll('[data-price]').forEach(p => { p.textContent = '0'; });
   }
 
   // Formulario (sin envío real: muestra confirmación)
@@ -326,12 +327,13 @@
     });
     // Revelado en forma de cima
     document.querySelectorAll('[data-peak]').forEach(el => {
-      gsap.fromTo(el, { clipPath: 'polygon(50% 100%, 50% 100%, 100% 100%, 0% 100%)' }, {
-        clipPath: 'polygon(50% 0%, 100% 0%, 100% 100%, 0% 100%)', duration: 1.6, ease: 'power4.inOut',
-        scrollTrigger: { trigger: el, start: 'top 85%', once: true }
-      });
       const img = el.querySelector('img, .ph__in');
-      if (img) gsap.from(img, { scale: 1.3, duration: 2, ease: EASE, scrollTrigger: { trigger: el, start: 'top 85%', once: true } });
+      const tl = gsap.timeline({ scrollTrigger: { trigger: el, start: 'top 85%', once: true } });
+      tl.fromTo(el, { clipPath: 'polygon(0% 100%, 50% 100%, 100% 100%, 100% 100%, 0% 100%)' },
+        { clipPath: 'polygon(0% 100%, 50% 0%, 100% 100%, 100% 100%, 0% 100%)', duration: .8, ease: 'power3.in' })
+        .to(el, { clipPath: 'polygon(0% 0%, 50% 0%, 100% 0%, 100% 100%, 0% 100%)', duration: .9, ease: 'power3.out' })
+        .add(() => { el.style.clipPath = 'none'; });
+      if (img) tl.from(img, { scale: 1.3, duration: 2, ease: EASE }, 0);
     });
     // Parallax simple
     document.querySelectorAll('[data-parallax]').forEach(el => {
@@ -342,13 +344,49 @@
     document.querySelectorAll('[data-spin]').forEach(el => {
       gsap.to(el, { rotate: parseFloat(el.dataset.spin) || 120, ease: 'none', scrollTrigger: { trigger: el.parentElement, start: 'top bottom', end: 'bottom top', scrub: true } });
     });
-    // Contadores
+    // Contadores: cada número sube desde 0 cuando entra en pantalla
     document.querySelectorAll('[data-count]').forEach(el => {
-      const end = parseFloat(el.dataset.count); const dec = (el.dataset.count.split(/[.,]/)[1] || '').length;
+      const end = parseFloat(el.dataset.count.replace(',', '.'));
+      const dec = (el.dataset.count.split(/[.,]/)[1] || '').length;
+      const pad = parseInt(el.dataset.pad || '0', 10);
+      const fmt = v => { let t = v.toFixed(dec).replace('.', ','); if (pad) t = t.padStart(pad, '0'); return t; };
       const o = { v: 0 };
-      gsap.to(o, { v: end, duration: 2, ease: 'power3.out', scrollTrigger: { trigger: el, start: 'top 90%', once: true },
-        onUpdate: () => { el.textContent = o.v.toFixed(dec).replace('.', ','); } });
+      el.textContent = fmt(0);
+      const intro = el.closest('[data-intro]');
+      const tw = gsap.to(o, { v: end, duration: parseFloat(el.dataset.dur) || 2.2, ease: 'power3.out', paused: !!intro,
+        scrollTrigger: intro ? null : { trigger: el, start: 'top bottom-=20', once: true },
+        onStart: () => el.classList.add('is-counting'),
+        onUpdate: () => { el.textContent = fmt(o.v); },
+        onComplete: () => { el.classList.remove('is-counting'); el.textContent = fmt(end); } });
+      if (intro) introQueue.push(tw);
     });
+
+    // Revelado de todo el texto: párrafos por líneas, textos cortos con fundido
+    const skip = '[data-split], [data-scrub-words], .ph, .marquee, .menu, .hover-fig, .loader, .hero__quote, .form-done, .btn, button, .chip-btn, svg, .plan__price, .hs__end, [data-count]';
+    const textSel = 'main p, main blockquote, main dd, main dt, main figcaption, main li, main th, main td, main label, main legend, main .tag, main .kicker, main .names__r, main .svc__meta, main .zone figcaption > *, .footer li, .footer h3, .footer__legal span, .studio-hero__cap span';
+    const seen = new Set();
+    const fades = [];
+    document.querySelectorAll(textSel).forEach(el => {
+      if (el.closest(skip) || el.matches('.step, .steps__line')) { return; }
+      // No anidar: si un ancestro ya está en la lista, se anima ese
+      for (let a = el.parentElement; a; a = a.parentElement) if (seen.has(a)) return;
+      seen.add(el);
+      const plain = !el.querySelector('[data-count]') && [...el.children].every(c => c.tagName === 'BR' || (c.tagName === 'SPAN' && !c.children.length));
+      const long = el.textContent.trim().length > 60;
+      if (plain && long && el.matches('p, blockquote, dd')) {
+        const lines = splitLines(el);
+        const intro = el.closest('[data-intro]');
+        const tw = gsap.from(lines, { yPercent: 110, opacity: 0, duration: 1.1, ease: EASE, stagger: .07, paused: !!intro,
+          scrollTrigger: intro ? null : { trigger: el, start: 'top bottom-=30', once: true } });
+        if (intro) introQueue.push(tw);
+      } else if (!el.closest('[data-intro]')) {
+        fades.push(el);
+      }
+    });
+    gsap.set(fades, { opacity: 0, y: 24 });
+    ST.batch(fades, { start: 'top bottom-=20', once: true,
+      onEnter: batch => gsap.to(batch, { opacity: 1, y: 0, duration: 1, ease: EASE, stagger: .06, overwrite: true }) });
+
     // Línea de progreso (método)
     document.querySelectorAll('[data-progress]').forEach(el => {
       gsap.fromTo(el, { scaleY: 0 }, { scaleY: 1, ease: 'none', scrollTrigger: { trigger: el.parentElement, start: 'top 60%', end: 'bottom 60%', scrub: true } });
@@ -381,6 +419,7 @@
         const yTo = gsap.quickTo(fig, 'y', { duration: .7, ease: 'power3' });
         const rTo = gsap.quickTo(fig, 'rotate', { duration: .9, ease: 'power3' });
         let px = 0;
+        list.addEventListener('pointerenter', e => { const r = list.getBoundingClientRect(); gsap.set(fig, { x: e.clientX - r.left, y: e.clientY - r.top }); px = e.clientX; });
         list.addEventListener('pointermove', e => {
           const r = list.getBoundingClientRect();
           xTo(e.clientX - r.left); yTo(e.clientY - r.top);

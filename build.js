@@ -115,7 +115,7 @@ function footer(meta) {
     </div>
   </div>
   <div class="footer__big" aria-hidden="true">${word()}</div>
-  <div class="footer__legal"><span>© ${new Date().getFullYear()} Nordfit · Entrenamiento personal en Madrid</span><span>5,0 en Google · 80 reseñas</span></div>
+  <div class="footer__legal"><span>© ${new Date().getFullYear()} Nordfit · Entrenamiento personal en Madrid</span><span><span data-count="5.0">5,0</span> en Google · <span data-count="80">80</span> reseñas</span></div>
 </footer>`;
 }
 
