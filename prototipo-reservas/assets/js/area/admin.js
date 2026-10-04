@@ -232,12 +232,14 @@
       title: `Reservar · ${NF.dayLabel(date)} ${NF.hourLabel(hr)}`,
       body: h('div.adm-form', null, h('label', { for: 'add-c' }, grp ? 'Cliente (grupo)' : 'Cliente'), sel, grp ? null : [h('label', { for: 'add-t' }, 'Entrenador'), tsel],
         h('p.muted.small', null, 'La sesión se descuenta del bono del cliente. Para parejas se reserva para los dos.')),
-      actions: [h('button.link-btn', { type: 'button', onclick: () => m.close() }, 'Cancelar'), btn('Reservar', { noIcon: true, onclick: () => {
+      actions: [h('button.link-btn', { type: 'button', onclick: () => m.close() }, 'Cancelar'), btn('Reservar', { noIcon: true, onclick: async () => {
         const c = NF.client(sel.value);
         const u = NF.usage(c.id, date.slice(0, 7));
-        if (u.left <= 0 && !window.confirm(`${first(c.name)} ya ha usado sus ${u.total} sesiones del mes. ¿Reservar igualmente?`)) return;
-        NF.adminBook(c.id, date, hr, grp ? grp.trainer : tsel.value);
-        m.close(); toast('Sesión reservada.', 'ok'); refresh();
+        const trainerId = grp ? grp.trainer : tsel.value;
+        m.close();
+        if (u.left <= 0 && !(await confirm('Bono completo', `${first(c.name)} ya ha usado sus ${u.total} sesiones del mes. ¿Reservar igualmente?`, 'Reservar igualmente'))) return;
+        NF.adminBook(c.id, date, hr, trainerId);
+        toast('Sesión reservada.', 'ok'); refresh();
       } })]
     });
   }
