@@ -425,3 +425,16 @@ body:has(.mbar) .toast { bottom: 96px; }
 .chart-tip strong { font-family: var(--f-display); font-size: .95rem; }
 .chart-tip[hidden] { display: none; }
 .view { position: relative; }
+
+/* Editor de pagos */
+.stack--tight { gap: 8px; }
+.field-label { margin: 0; font-family: var(--f-display); font-weight: 600; font-size: .8rem; color: var(--steel); }
+.adm-form input[type="date"] { color-scheme: dark; }
+.cell-note { display: block; color: var(--steel); font-size: .76rem; }
+.status-btn { padding: 4px 10px 4px 8px; margin-left: -8px; border-radius: 999px; transition: background .2s; }
+.status-btn:hover, .status-btn:focus-visible { background: rgba(207, 212, 219, .08); }
+.pay-rows { list-style: none; margin: 0 0 12px; padding: 0; display: grid; }
+.pay-rows li { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line-dark); }
+.pay-rows li > span:first-child { display: grid; min-width: 0; }
+.pay-rows small { color: var(--steel); font-size: .76rem; overflow-wrap: anywhere; }
+[hidden] { display: none !important; }

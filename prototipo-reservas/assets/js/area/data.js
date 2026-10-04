@@ -339,6 +339,26 @@ window.NF = (() => {
     p.status = 'pending'; p.paidAt = null;
     save();
   }
+  // Edición completa de un pago desde /admin (efectivo, transferencia, correcciones…)
+  function setPayment(paymentId, f) {
+    const p = db().payments.find(x => x.id === paymentId);
+    p.status = f.status;
+    p.method = f.method;
+    p.amount = f.amount;
+    p.note = f.note || '';
+    p.paidAt = f.status === 'paid' ? (f.paidAt || today()) : null;
+    if (f.status === 'paid') p.promised = false;
+    save();
+    return p;
+  }
+  // Cargo de un mes que aún no existe (p. ej. alguien paga noviembre por adelantado)
+  function addPayment(clientId, month) {
+    const c = client(clientId);
+    const p = { id: uid('p'), client: clientId, month, amount: PLANS[c.plan].price, status: 'pending', method: c.method, paidAt: null };
+    db().payments.push(p);
+    save();
+    return p;
+  }
   // Crea los cargos del mes para los clientes activos que aún no lo tienen
   function ensureMonth(month) {
     let n = 0;
@@ -401,6 +421,6 @@ window.NF = (() => {
     ymd, ym, parse, addDays, addMonths, at, today, thisMonth, monthName, monthLabel, dayLabel, hourLabel, cap, money, initials, DAYS, MONTHS,
     client, trainer, closure, isOpen, payment, bookingsOf, usage, slots, groupTaken, trainerBusy, counts,
     book, cancel, cancelInfo, pay, updateProfile,
-    markPaid, markPending, ensureMonth, remind, lastReminder, saveClient, toggleClosure, affectedBy, adminCancel, adminBook, saveGroup, removeGroup
+    markPaid, markPending, setPayment, addPayment, ensureMonth, remind, lastReminder, saveClient, toggleClosure, affectedBy, adminCancel, adminBook, saveGroup, removeGroup
   };
 })();

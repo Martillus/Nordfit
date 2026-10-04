@@ -60,19 +60,59 @@
   }
 
   /* ---------------- Acciones de pago ---------------- */
-  function markPaidFlow(p) {
-    let method = p.method === 'card' || p.method === 'sepa' ? 'cash' : p.method;
+  /* Editor de pago: marcar pagado en efectivo/transferencia, cambiar la forma
+     de pago, la fecha o el importe, o volver a dejarlo pendiente */
+  function editPayment(p, preset = {}) {
     const c = NF.client(p.client);
-    const radios = h('div.choices.choices--dark', { role: 'radiogroup', 'aria-label': 'Forma de pago' }, ['cash', 'transfer', 'card', 'sepa'].map(v => [
-      h('input', { type: 'radio', name: 'mp', id: 'mp-' + v, value: v, checked: v === method, onchange: () => { method = v; } }),
-      h('label', { for: 'mp-' + v }, NF.METHODS[v])
-    ]));
+    const f = {
+      status: preset.status || p.status,
+      method: preset.method || (p.status === 'paid' || p.method === 'cash' || p.method === 'transfer' ? p.method : 'cash')
+    };
+    const radio = (name, value, label, checked, onchange) => [
+      h('input', { type: 'radio', name, id: `${name}-${value}`, value, checked, onchange }),
+      h('label', { for: `${name}-${value}` }, label)
+    ];
+    const statusGroup = h('div.choices.choices--dark', { role: 'radiogroup', 'aria-labelledby': 'ep-st-l' },
+      radio('ep-st', 'paid', 'Pagado', f.status === 'paid', () => { f.status = 'paid'; sync(); }),
+      radio('ep-st', 'pending', 'Pendiente', f.status === 'pending', () => { f.status = 'pending'; sync(); }));
+    const methodGroup = h('div.choices.choices--dark', { role: 'radiogroup', 'aria-labelledby': 'ep-m-l' },
+      ['cash', 'transfer', 'card', 'sepa'].map(v => radio('ep-m', v, NF.METHODS[v], f.method === v, () => { f.method = v; })));
+    const date = h('input', { id: 'ep-date', type: 'date', value: p.paidAt || NF.today(), max: NF.today() });
+    const amount = h('input', { id: 'ep-amt', type: 'number', min: '0', step: '1', value: p.amount, inputmode: 'numeric' });
+    const note = h('input', { id: 'ep-note', value: p.note || '', maxlength: '80', placeholder: 'Ej.: en mano a Sergio, descuento por lesión…' });
+    const paidOnly = h('div.adm-form.adm-form--grid', null,
+      h('div', null, h('label', { for: 'ep-date' }, 'Fecha de pago'), date),
+      h('div', null, h('label', { for: 'ep-amt' }, 'Importe (€)'), amount));
+    const methodLabel = h('p.field-label', { id: 'ep-m-l' });
+    const methodWrap = h('div.stack.stack--tight', null, methodLabel, methodGroup);
+    const sync = () => { paidOnly.hidden = f.status !== 'paid'; methodLabel.textContent = f.status === 'paid' ? '¿Cómo ha pagado?' : 'Forma de pago prevista'; };
     const m = modal({
-      title: 'Marcar como pagado',
-      body: h('div.stack', null, h('p', null, `${c.name} · bono de ${NF.monthName(p.month)} · `, h('strong', null, NF.money(p.amount))), h('p.muted', null, '¿Cómo ha pagado?'), radios),
-      actions: [h('button.link-btn', { type: 'button', onclick: () => m.close() }, 'Cancelar'), btn('Marcar pagado', { noIcon: true, onclick: () => { NF.markPaid(p.id, method); m.close(); toast(`${first(c.name)}: pago registrado.`, 'ok'); refresh(); } })]
+      title: `${c.name} · ${NF.cap(NF.monthLabel(p.month))}`,
+      body: h('div.stack', null,
+        h('p.muted', null, `Bono ${NF.PLANS[c.plan].name} · tarifa ${NF.money(NF.PLANS[c.plan].price)}`),
+        h('div.stack.stack--tight', null, h('p.field-label', { id: 'ep-st-l' }, 'Estado'), statusGroup),
+        methodWrap,
+        paidOnly,
+        h('div.adm-form', null, h('label', { for: 'ep-note' }, 'Nota (opcional)'), note)),
+      actions: [h('button.link-btn', { type: 'button', onclick: () => m.close() }, 'Cancelar'), btn('Guardar', { noIcon: true, onclick: () => {
+        const amt = Math.round(Number(amount.value));
+        if (f.status === 'paid' && (!Number.isFinite(amt) || amt < 0)) { amount.classList.add('is-error'); amount.focus(); return; }
+        if (f.status === 'paid' && (!date.value || date.value > NF.today())) { date.classList.add('is-error'); date.focus(); return; }
+        NF.setPayment(p.id, { status: f.status, method: f.method, paidAt: date.value, amount: f.status === 'paid' ? amt : p.amount, note: note.value.trim() });
+        m.close();
+        toast(f.status === 'paid' ? `${first(c.name)}: pagado en ${NF.METHODS[f.method].toLowerCase()}.` : `${first(c.name)}: pago pendiente.`, 'ok');
+        refresh();
+      } })]
     });
+    sync();
   }
+  // Abre el editor del pago de un mes; si ese mes aún no tiene cargo, lo crea
+  function editMonth(clientId, month, preset) {
+    editPayment(NF.payment(clientId, month) || NF.addPayment(clientId, month), preset);
+  }
+  const paidBtn = p => h('button.mini-btn', { type: 'button', onclick: () => editPayment(p, { status: 'paid' }) }, icon('check'), 'Pagado');
+  const editBtn = p => h('button.mini-btn', { type: 'button', onclick: () => editPayment(p) }, 'Editar');
+
   function remindBtn(p) {
     const c = NF.client(p.client);
     const last = NF.lastReminder(c.id, p.month);
@@ -122,7 +162,7 @@
             const c = NF.client(p.client);
             return h('li', null,
               h('span', null, h('strong', null, c.name), h('small', null, `${NF.money(p.amount)} · ${p.promised ? 'dice que paga en ' + NF.METHODS[p.method].toLowerCase() : 'sin pagar'}`)),
-              h('span.due-list__act', null, remindBtn(p), h('button.mini-btn', { type: 'button', onclick: () => markPaidFlow(p) }, icon('check'), 'Pagado')));
+              h('span.due-list__act', null, remindBtn(p), paidBtn(p)));
           })) : h('p.muted', null, 'Todo cobrado este mes.')))
     );
   };
@@ -260,7 +300,7 @@
         h('th', { scope: 'row' }, h('button.row-link', { type: 'button', onclick: () => clientModal(c) }, c.name), c.active ? null : h('small', null, ' · de baja')),
         h('td', null, NF.PLANS[c.plan].short),
         h('td', null, c.plan === 'grupo' ? '—' : NF.trainer(c.trainer).name),
-        h('td', null, c.active ? payStatus(u.payment) : '—'),
+        h('td', null, c.active ? h('button.status-btn', { type: 'button', title: 'Cambiar el pago de este mes', onclick: () => editMonth(c.id, cur, u.paid ? {} : { status: 'paid' }) }, payStatus(u.payment)) : '—'),
         h('td.num', null, c.active ? `${u.used}/${u.total}` : '—'),
         h('td', null, NF.METHODS[c.method]),
         h('td', null, h('a.u-line', { href: 'tel:+34' + c.phone }, c.phone)));
@@ -292,7 +332,12 @@
       const pays = NF.db().payments.filter(p => p.client === c.id).sort((a, b) => b.month.localeCompare(a.month)).slice(0, 6);
       const next = NF.bookingsOf(c.id).filter(b => b.status === 'ok' && b.date >= NF.today()).slice(0, 6);
       history = h('div.client-hist', null,
-        h('div', null, h('h3', null, 'Pagos'), h('ul.plain', null, pays.map(p => h('li', null, NF.monthLabel(p.month), ' · ', payStatus(p))))),
+        h('div', null, h('h3', null, 'Pagos'),
+          h('ul.pay-rows', null, pays.map(p => h('li', null,
+            h('span', null, NF.cap(NF.monthLabel(p.month)), h('small', null, `${NF.money(p.amount)}${p.status === 'paid' ? ' · ' + NF.METHODS[p.method] : ''}${p.note ? ' · ' + p.note : ''}`)),
+            payStatus(p),
+            h('button.mini-btn', { type: 'button', onclick: () => { m.close(); editPayment(p); } }, 'Editar')))),
+          NF.payment(c.id, NF.addMonths(cur, 1)) ? null : h('button.mini-btn', { type: 'button', onclick: () => { m.close(); editMonth(c.id, NF.addMonths(cur, 1), { status: 'paid' }); } }, icon('plus'), `Registrar pago de ${NF.monthName(NF.addMonths(cur, 1))}`)),
         h('div', null, h('h3', null, 'Próximas sesiones'), next.length ? h('ul.plain', null, next.map(b => h('li', null, `${NF.dayLabel(b.date)} · ${NF.hourLabel(b.h)}`))) : h('p.muted', null, 'Ninguna.')));
     }
     const m = modal({
@@ -334,10 +379,8 @@
         h('td', null, NF.PLANS[c.plan].short),
         h('td.num', null, NF.money(p.amount)),
         h('td', null, payStatus(p)),
-        h('td', null, p.status === 'paid' ? `${NF.METHODS[p.method]} · ${NF.parse(p.paidAt).toLocaleDateString('es-ES')}` : '—'),
-        h('td.actions', null, p.status === 'paid'
-          ? h('button.mini-btn', { type: 'button', onclick: async () => { if (await confirm('Deshacer pago', `El bono de ${first(c.name)} vuelve a quedar pendiente.`, 'Deshacer')) { NF.markPending(p.id); refresh(); } } }, 'Deshacer')
-          : [remindBtn(p), h('button.mini-btn', { type: 'button', onclick: () => markPaidFlow(p) }, icon('check'), 'Pagado')]));
+        h('td', null, p.status === 'paid' ? `${NF.METHODS[p.method]} · ${NF.parse(p.paidAt).toLocaleDateString('es-ES')}` : '—', p.note ? h('small.cell-note', null, p.note) : null),
+        h('td.actions', null, p.status === 'paid' ? editBtn(p) : [remindBtn(p), paidBtn(p), editBtn(p)]));
     });
     const csv = () => {
       const lines = [['Cliente', 'Plan', 'Mes', 'Importe', 'Estado', 'Forma de pago', 'Fecha de pago']].concat(pays.map(p => {
