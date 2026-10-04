@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Panel Nordfit</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#0d121a">
+<link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Montserrat:wght@200;300;600;700;800;900&display=swap">
+<link rel="stylesheet" href="assets/css/styles.css">
+<link rel="stylesheet" href="assets/css/pages.css">
+<link rel="stylesheet" href="assets/css/area.css">
+</head>
+<body class="adm-body">
+
+<!-- Acceso -->
+<main class="adm-login" data-login hidden>
+  <div class="adm-login__card">
+    <img src="assets/img/nordfit-logo.svg" alt="Nordfit" class="adm-login__logo" width="120" height="80">
+    <h1 class="display h-sm">Panel <span class="thin">privado</span></h1>
+    <form class="adm-form" novalidate>
+      <label for="adm-user">Usuario</label>
+      <input id="adm-user" name="user" type="email" autocomplete="username" required>
+      <label for="adm-pass">Contraseña</label>
+      <input id="adm-pass" name="pass" type="password" autocomplete="current-password" required>
+      <p class="adm-form__err" role="alert" hidden>Usuario o contraseña incorrectos.</p>
+      <button class="btn" type="submit"><span class="roll"><span>Entrar</span><span aria-hidden="true">Entrar</span></span><span class="ico"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 13L13 3M5 3h8v8"/></svg></span></button>
+    </form>
+    <p class="adm-login__demo"><span class="tag-proto">Prototipo</span> Usuario <code>admin@nordfit.es</code> · contraseña <code>nordfit</code> <button type="button" class="link-btn link-btn--light" data-fill>Rellenar</button></p>
+  </div>
+</main>
+
+<!-- Panel -->
+<div class="adm" data-app hidden>
+  <aside class="adm-side">
+    <a class="adm-brand" href="index.html" aria-label="Ir a la web pública">
+      <img src="assets/img/nordfit-logo.svg" alt="" width="40" height="27"><span>Panel</span>
+    </a>
+    <nav class="adm-nav" aria-label="Secciones del panel">
+      <button type="button" data-view="resumen">Resumen</button>
+      <button type="button" data-view="agenda">Agenda</button>
+      <button type="button" data-view="clientes">Clientes</button>
+      <button type="button" data-view="pagos">Pagos</button>
+      <button type="button" data-view="calendario">Calendario</button>
+      <button type="button" data-view="stats">Estadísticas</button>
+    </nav>
+    <div class="adm-side__foot">
+      <span class="tag-proto">Prototipo</span>
+      <button type="button" class="link-btn link-btn--light" data-reset>Restablecer datos</button>
+      <button type="button" class="link-btn link-btn--light" data-logout>Cerrar sesión</button>
+    </div>
+  </aside>
+  <main class="adm-main" id="main" tabindex="-1" data-main></main>
+</div>
+
+<script src="assets/js/area/data.js"></script>
+<script src="assets/js/area/ui.js"></script>
+<script src="assets/js/area/admin.js"></script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+<!--{"key":"cuenta","label":"Mi cuenta","noCta":true,"css":"area.css","title":"Mi cuenta · Nordfit","desc":"Tus reservas, tu bono y tus pagos en Nordfit.","js":["area/data.js","area/ui.js","area/cuenta.js"]}-->
+<div data-app>
+  <section class="acct-head">
+    <div class="acct-head__top">
+      <div>
+        <p class="kicker">Mi cuenta</p>
+        <h1 class="display h-md acct-head__title">Hola, <span class="thin" data-first-name></span></h1>
+      </div>
+      <button class="link-btn link-btn--light" type="button" data-logout>Cerrar sesión</button>
+    </div>
+    <dl class="acct-stats" data-stats></dl>
+    <div class="tabs" role="tablist" aria-label="Secciones de mi cuenta">
+      <button role="tab" id="tab-reservar" aria-controls="panel-reservar" aria-selected="true" data-tab="reservar">Reservar</button>
+      <button role="tab" id="tab-sesiones" aria-controls="panel-sesiones" aria-selected="false" tabindex="-1" data-tab="sesiones">Mis sesiones</button>
+      <button role="tab" id="tab-pagos" aria-controls="panel-pagos" aria-selected="false" tabindex="-1" data-tab="pagos">Pagos</button>
+      <button role="tab" id="tab-datos" aria-controls="panel-datos" aria-selected="false" tabindex="-1" data-tab="datos">Mis datos</button>
+    </div>
+  </section>
+
+  <div class="acct-body light">
+    <section class="panel" role="tabpanel" id="panel-reservar" aria-labelledby="tab-reservar" data-panel="reservar"></section>
+    <section class="panel" role="tabpanel" id="panel-sesiones" aria-labelledby="tab-sesiones" data-panel="sesiones" hidden></section>
+    <section class="panel" role="tabpanel" id="panel-pagos" aria-labelledby="tab-pagos" data-panel="pagos" hidden></section>
+    <section class="panel" role="tabpanel" id="panel-datos" aria-labelledby="tab-datos" data-panel="datos" hidden></section>
+  </div>
+</div>

@@ -1,0 +1,54 @@
+<!--{"key":"acceso","label":"Acceso","noCta":true,"css":"area.css","title":"Reserva tus clases · Nordfit","desc":"Área de clientes de Nordfit: reserva tus sesiones del mes, paga tu bono y consulta tus pagos.","js":["area/data.js","area/ui.js","area/acceso.js"]}-->
+<section class="auth" data-intro data-app>
+  <div class="ring-deco" data-spin="60" aria-hidden="true">{{mark()}}</div>
+  <div class="auth__text">
+    <p class="kicker" data-reveal>Área de clientes</p>
+    <h1 class="display h-lg" data-split="lines">Reserva <span class="thin">tus clases</span></h1>
+    <p class="lead" data-reveal>Elige tus sesiones del mes, paga tu bono y consulta tus pagos. Todo en un sitio, sin mensajes de ida y vuelta.</p>
+    <ul class="auth__list" data-reveal>
+      <li>Calendario con los huecos libres de tu entrenador</li>
+      <li>Pago del bono con tarjeta o domiciliación</li>
+      <li>Cancela gratis hasta 24 horas antes</li>
+    </ul>
+  </div>
+
+  <div class="auth__card light" data-reveal>
+    <div data-step="email">
+      <h2 class="display h-sm">Entra con <span class="thin">tu email</span></h2>
+      <p class="muted">Te enviamos un enlace para entrar. Sin contraseñas que recordar.</p>
+      <form class="form" data-login novalidate>
+        <div class="field">
+          <label for="login-email">Email</label>
+          <input id="login-email" name="email" type="email" autocomplete="email" inputmode="email" required placeholder="nombre@correo.com">
+          <span class="field__err">Escribe un email válido.</span>
+        </div>
+        <button class="btn btn--dark" type="submit"><span class="roll"><span>Enviarme el enlace</span><span aria-hidden="true">Enviarme el enlace</span></span><span class="ico">{{ARROW}}</span></button>
+      </form>
+    </div>
+
+    <div data-step="sent" hidden>
+      <h2 class="display h-sm">Revisa <span class="thin">tu correo</span></h2>
+      <p class="muted">Hemos enviado un enlace de acceso a <strong data-email></strong>. Caduca en 15 minutos.</p>
+      <div class="auth__sim">
+        <span class="tag-proto">Prototipo</span>
+        <p>Aquí no se envía ningún correo. Pulsa el botón para simular que abres el enlace.</p>
+        <button class="btn btn--dark" type="button" data-open-link><span class="roll"><span>Abrir el enlace</span><span aria-hidden="true">Abrir el enlace</span></span><span class="ico">{{ARROW}}</span></button>
+      </div>
+      <button class="link-btn" type="button" data-back>Usar otro email</button>
+    </div>
+
+    <div data-step="unknown" hidden>
+      <h2 class="display h-sm">Aún no tienes <span class="thin">cuenta</span></h2>
+      <p class="muted">No encontramos <strong data-email></strong> entre nuestros clientes. Las cuentas se activan después de la valoración inicial, cuando elegimos juntos tu plan.</p>
+      <div class="auth__actions">
+        {{btn('contacto.html#reserva', 'Reservar valoración', 'btn--dark')}}
+        <button class="link-btn" type="button" data-back>Probar con otro email</button>
+      </div>
+    </div>
+
+    <div class="auth__demo">
+      <span class="tag-proto">Prototipo</span>
+      <p>Cuenta de prueba: <button class="link-btn" type="button" data-demo="lucia@ejemplo.com">lucia@ejemplo.com</button> (1:1 con Sergio) o <button class="link-btn" type="button" data-demo="raul.medina@ejemplo.com">raul.medina@ejemplo.com</button> (grupo reducido).</p>
+    </div>
+  </div>
+</section>
