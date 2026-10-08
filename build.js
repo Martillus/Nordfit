@@ -93,7 +93,7 @@ function footer(meta) {
   const cta = meta.key === 'contacto' ? '' : `
   <div class="footer__cta">
     <h2 class="display" data-split="lines">Tu primera sesión<br><span class="thin">empieza aquí</span></h2>
-    ${btn('contacto.html', 'Reservar valoración')}
+    ${btn('contacto.html', 'Pedir valoración')}
   </div>`;
   return `<footer class="footer">${cta}
   <div class="footer__grid">
