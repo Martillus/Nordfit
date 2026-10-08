@@ -68,6 +68,9 @@
 .hs { position: relative; overflow: hidden; }
 .hs__track { display: flex; gap: clamp(20px, 2.5vw, 40px); padding: clamp(96px, 12vw, 160px) var(--gutter); align-items: stretch; width: max-content; }
 .hs__intro { width: min(440px, 82vw); display: grid; align-content: center; gap: 24px; flex-shrink: 0; padding-right: 3vw; }
+/* El titular cabe siempre en su columna: antes "ENTRENAR" se salía y la primera tarjeta lo tapaba */
+.hs__intro { width: min(520px, 84vw); min-width: 0; position: relative; z-index: 1; }
+.hs__intro .display { font-size: clamp(2.6rem, 1.6rem + 2.6vw, 4.6rem); overflow-wrap: anywhere; }
 .hs__bar { height: 2px; background: var(--line-dark); width: 100%; margin-top: 12px; }
 .hs__bar span { display: block; height: 100%; background: var(--oak); transform-origin: 0 50%; transform: scaleX(0); }
 .hs__card {
@@ -344,6 +347,9 @@ fieldset.field { border: 0; margin: 0; padding: 0; }
 .hours th, .hours td { padding: 14px 0; border-bottom: 1px solid var(--line-dark); text-align: left; font-variant-numeric: tabular-nums; }
 .hours td { text-align: right; color: var(--steel); }
 .hours tr.is-today th, .hours tr.is-today td { color: var(--oak); }
+.light .hours th, .light .hours td { border-color: var(--line-light); }
+.light .hours td { color: #5d636b; }
+.light .hours tr.is-today th, .light .hours tr.is-today td { color: #8a5a2c; }
 .map-card { display: grid; gap: clamp(32px, 5vw, 72px); }
 @media (min-width: 960px) { .map-card { grid-template-columns: 1.3fr 1fr; } }
 .map-art { position: relative; aspect-ratio: 16 / 11; max-width: 100%; border-radius: 6px; overflow: hidden; background: var(--ink); }

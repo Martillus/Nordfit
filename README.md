@@ -10,7 +10,7 @@ Web multipágina del estudio de entrenamiento personal **Nordfit** (C. de San Na
 | `equipo.html` | Entrenadores, valores |
 | `estudio.html` | Foto del espacio con expansión parallax, material, rincones del estudio |
 | `tarifas.html` | Planes con selector bono/sesión, comparativa |
-| `contacto.html` | Contacto, formulario de reserva, mapa y horario |
+| `contacto.html` | Contacto (teléfono, WhatsApp, dirección), mapa y horario |
 
 ## Editar
 Las páginas se escriben en `src/pages/*.html`; cabecera, menú, loader y pie son comunes y se generan con:
@@ -27,4 +27,3 @@ Los huecos rayados con el texto «Foto pendiente» indican qué foto va en cada 
 ## Revisar antes de publicar
 - Precios de `tarifas.html` (son orientativos).
 - Horario semanal de `contacto.html` (solo se conoce el cierre a las 22:00).
-- El formulario de contacto no envía datos: conéctalo a tu servicio (Formspree, Netlify Forms, etc.).

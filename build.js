@@ -76,7 +76,7 @@ function header(meta) {
   <a class="brand" href="index.html" data-label="Inicio" aria-label="Nordfit, ir al inicio">${mark('brand__mark')}${word('brand__word')}</a>
   <nav class="nav" aria-label="Principal">
     <ul class="nav__links">${links}</ul>
-    ${btn('contacto.html#reserva', 'Primera sesión')}
+    ${btn('contacto.html', 'Primera sesión')}
     <button class="burger" aria-label="Abrir menú" aria-expanded="false" aria-controls="menu"><span></span><span></span></button>
   </nav>
 </header>
@@ -93,7 +93,7 @@ function footer(meta) {
   const cta = meta.key === 'contacto' ? '' : `
   <div class="footer__cta">
     <h2 class="display" data-split="lines">Tu primera sesión<br><span class="thin">empieza aquí</span></h2>
-    ${btn('contacto.html#reserva', 'Reservar valoración')}
+    ${btn('contacto.html', 'Reservar valoración')}
   </div>`;
   return `<footer class="footer">${cta}
   <div class="footer__grid">
