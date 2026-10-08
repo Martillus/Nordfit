@@ -98,6 +98,16 @@
 .hs__endico svg { width: 22px; }
 .hs__end:hover .hs__end .display { font-size: clamp(1.8rem, 1rem + 1.8vw, 3rem); }
 .hs__endico { transform: rotate(45deg) scale(1.1); }
+/* Con el scroll horizontal fijado, toda la tarjeta (foto + título + texto) tiene
+   que caber en una pantalla: la sección ocupa el alto de la ventana, el
+   contenido va centrado y las fotos se dimensionan según el alto disponible */
+@media (min-width: 900px) {
+  .hs { min-height: 100vh; min-height: 100svh; display: flex; align-items: center; }
+  .hs__track { padding-block: clamp(64px, 9vh, 104px) clamp(24px, 4vh, 48px); }
+  .hs__card { width: min(30vw, 38vh, 440px); width: min(30vw, 38svh, 440px); gap: 18px; }
+  .hs__card .display { font-size: clamp(1.4rem, 1rem + 1vw, 2rem); }
+  .hs__card { min-width: 0; }
+}
 @media (max-width: 899px) {
   .hs__track { width: auto; overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; scrollbar-width: none; padding-block: 96px; }
   .hs__track::-webkit-scrollbar { display: none; }
