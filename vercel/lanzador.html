@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Nordfit Reservas</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0d121a">
+<link rel="icon" href="web/assets/img/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Montserrat:wght@200;700;800&display=swap">
+<style>
+/* Lanzador del prototipo: misma identidad que la web (azul noche, aluminio, roble). Una columna, tres puertas. */
+:root {
+  --night: #0d121a; --ink: #161d28; --ink-2: #1e2734; --steel: #8b95a3; --silver: #cfd4db; --paper: #e7e8ea; --oak: #b7824f;
+  --line: rgba(207, 212, 219, .14);
+  --f-display: "Montserrat", "Helvetica Neue", Arial, sans-serif;
+  --f-body: "Manrope", "Helvetica Neue", Arial, sans-serif;
+  --peak: polygon(50% 0%, 100% 100%, 0% 100%);
+  color-scheme: dark;
+}
+body { margin: 0; background: var(--night); color: var(--silver); font-family: var(--f-body); font-size: 16px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+.wrap { max-width: 980px; margin: 0 auto; padding-inline: 20px; padding-block: 56px 72px; display: grid; gap: 40px; }
+.kicker { font-family: var(--f-display); font-weight: 700; font-size: .78rem; letter-spacing: .06em; text-transform: uppercase; color: var(--steel); display: inline-flex; gap: .7em; align-items: center; }
+.kicker::before { content: ""; width: 12px; height: 10px; background: var(--oak); clip-path: var(--peak); }
+h1 { font-family: var(--f-display); font-weight: 800; text-transform: uppercase; font-size: clamp(2.4rem, 1.4rem + 5vw, 4.6rem); line-height: .95; letter-spacing: -.02em; margin: 14px 0 0; color: var(--paper); text-wrap: balance; }
+h1 span { font-weight: 200; }
+.intro p { max-width: 60ch; margin: 18px 0 0; font-size: 1.08rem; }
+.doors { display: grid; gap: 14px; }
+@media (min-width: 820px) { .doors { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.door { display: grid; gap: 14px; align-content: start; padding: 26px 24px; border-radius: 10px; background: var(--ink); box-shadow: inset 0 0 0 1px var(--line); color: inherit; text-decoration: none; transition: box-shadow .3s, transform .4s cubic-bezier(.22, 1, .36, 1); min-width: 0; }
+.door:hover { box-shadow: inset 0 0 0 1.5px var(--silver); transform: translateY(-3px); }
+.door:focus-visible { outline: 2px solid var(--oak); outline-offset: 4px; }
+.door--main { background: var(--silver); color: var(--night); box-shadow: none; }
+.door--main .door__p, .door--main .door__login { color: #3f4650; }
+.door--main .door__login { background: rgba(13, 18, 26, .07); }
+.door__n { font-family: var(--f-display); font-weight: 200; font-size: .9rem; color: var(--steel); font-variant-numeric: tabular-nums; }
+.door--main .door__n { color: #5d636b; }
+.door h2 { margin: 0; font-family: var(--f-display); font-weight: 800; text-transform: uppercase; font-size: 1.45rem; line-height: 1.05; letter-spacing: -.01em; }
+.door h2 span { font-weight: 200; }
+.door__p { margin: 0; color: var(--steel); font-size: .95rem; }
+.door__login { font-size: .84rem; padding: 12px 14px; border-radius: 8px; background: var(--ink-2); color: var(--silver); display: grid; gap: 2px; overflow-wrap: anywhere; }
+.door__login b { font-weight: 700; }
+.door__go { font-family: var(--f-display); font-weight: 700; font-size: .9rem; display: inline-flex; align-items: center; gap: 10px; margin-top: 4px; }
+.door__go i { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--silver); color: var(--night); font-style: normal; transition: transform .4s cubic-bezier(.22, 1, .36, 1); }
+.door--main .door__go i { background: var(--night); color: var(--silver); }
+.door:hover .door__go i { transform: rotate(-45deg); }
+.door__go svg { width: 13px; height: 13px; }
+.try { display: grid; gap: 14px; padding-top: 32px; border-top: 1px solid var(--line); }
+.try h2 { margin: 0; font-family: var(--f-display); font-weight: 700; font-size: 1.1rem; color: var(--paper); }
+.try ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; counter-reset: s; }
+.try li { display: grid; grid-template-columns: 28px 1fr; gap: 10px; align-items: baseline; counter-increment: s; }
+.try li::before { content: counter(s); font-family: var(--f-display); font-weight: 700; font-size: .8rem; color: var(--oak); font-variant-numeric: tabular-nums; }
+.note { font-size: .86rem; color: var(--steel); max-width: 70ch; }
+.note b { color: var(--silver); }
+@media (prefers-reduced-motion: reduce) { .door, .door__go i { transition: none; } }
+</style>
+
+
+</head>
+<body>
+<main class="wrap">
+  <header class="intro">
+    <span class="kicker">Prototipo · área de clientes</span>
+    <h1>Nordfit <span>reservas</span></h1>
+    <p>Copia de la web con el sistema de reservas y pagos añadido. Todo se puede pulsar: los datos son de ejemplo, no se cobra nada y lo que cambies se guarda solo en tu navegador.</p>
+  </header>
+
+  <nav class="doors" aria-label="Partes del prototipo">
+    <a class="door" href="web/index.html">
+      <span class="door__n">1</span>
+      <h2>Web <span>pública</span></h2>
+      <p class="door__p">La web de siempre con el botón «Reserva tus clases» arriba a la derecha. Si ya has entrado, cambia a «Mi cuenta».</p>
+      <span class="door__go"><i><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 13L13 3M5 3h8v8"/></svg></i>Abrir la web</span>
+    </a>
+    <a class="door door--main" href="web/acceso.html">
+      <span class="door__n">2</span>
+      <h2>Área de <span>cliente</span></h2>
+      <p class="door__p">Calendario con huecos libres, selección de sesiones, pago del bono, cancelaciones e historial de pagos.</p>
+      <span class="door__login"><span>Pulsa uno de los emails de prueba:</span><b>lucia@ejemplo.com</b><span>(1:1 con Sergio) o <b>raul.medina@ejemplo.com</b> (grupo)</span></span>
+      <span class="door__go"><i><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 13L13 3M5 3h8v8"/></svg></i>Entrar como cliente</span>
+    </a>
+    <a class="door" href="web/admin.html">
+      <span class="door__n">3</span>
+      <h2>Panel <span>/admin</span></h2>
+      <p class="door__p">Para el dueño: quién ha pagado, agenda semanal, clientes, días cerrados, grupos y estadísticas.</p>
+      <span class="door__login"><span>Usuario <b>admin@nordfit.es</b></span><span>Contraseña <b>nordfit</b> (o pulsa «Rellenar»)</span></span>
+      <span class="door__go"><i><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 13L13 3M5 3h8v8"/></svg></i>Abrir el panel</span>
+    </a>
+  </nav>
+
+  <section class="try" aria-labelledby="probar">
+    <h2 id="probar">Prueba esto</h2>
+    <ol>
+      <li><span>Entra como Lucía, elige dos o tres horas en distintos días y confirma las reservas.</span></li>
+      <li><span>Pasa al mes siguiente con la flecha: el bono está sin pagar, así que el botón pasa a «Pagar y reservar».</span></li>
+      <li><span>En «Mis sesiones», cancela una: si faltan más de 24 h vuelve a tu bono.</span></li>
+      <li><span>Abre el panel: verás las reservas de Lucía en la agenda y su pago en «Pagos».</span></li>
+      <li><span>En «Calendario», cierra un día como festivo y vuelve al área de cliente: ese día ya no se puede reservar.</span></li>
+    </ol>
+    <p class="note">«Restablecer datos» (en el panel o en «Mis datos») vuelve al estado inicial.</p>
+  </section>
+</main>
+
+</body>
+</html>
