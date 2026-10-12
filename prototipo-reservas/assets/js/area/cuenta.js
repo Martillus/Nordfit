@@ -22,12 +22,12 @@
     const c = me();
     $('[data-first-name]').textContent = c.name.split(' ')[0];
     const u = NF.usage(c.id, cur);
-    const pay = u.paid ? status('paid', 'Pagado') : u.promised ? status('pending', 'Pagarás en el estudio') : status('pending', 'Pendiente');
+    const pay = u.paid ? status('paid', 'Pagado') : u.promised ? status('pending', 'Pendiente de confirmar') : status('pending', 'Pendiente');
     const partner = c.partner ? NF.client(c.partner) : null;
     const dl = $('[data-stats]');
     dl.replaceChildren(
       h('div', null, h('dt', null, 'Plan'), h('dd', null, plan().name, partner ? h('small', null, ' con ' + partner.name.split(' ')[0]) : null)),
-      h('div', null, h('dt', null, c.plan === 'grupo' ? 'Grupos' : 'Entrenador'), h('dd', null, c.plan === 'grupo' ? 'Sergio y Jules' : NF.trainer(c.trainer).name)),
+      h('div', null, h('dt', null, c.plan === 'grupo' ? 'Grupos' : 'Entrenador'), h('dd', null, c.plan === 'grupo' ? 'Todo el equipo' : NF.trainer(c.trainer).name)),
       h('div', null, h('dt', null, `Bono de ${NF.monthName(cur)}`),
         h('dd', null, h('span.num', null, `${u.used}/${u.total}`), h('small', null, ' sesiones'),
           meter(u.used, u.total))),
@@ -86,7 +86,7 @@
         icon(u.paid ? 'check' : 'clock'),
         h('p', null, h('strong', null, `Bono de ${NF.monthName(state.month)}: `),
           u.left ? `te quedan ${u.left} de ${u.total} sesiones.` : 'ya has reservado todas tus sesiones.',
-          u.promised ? ' Pago pendiente en el estudio.' : ''));
+          u.promised ? ' Pago pendiente de confirmar.' : ''));
     } else {
       notice = h('div.notice.notice--warn', null, icon('alert'),
         h('p', null, h('strong', null, `Bono de ${NF.monthName(state.month)} pendiente de pago. `),
@@ -120,6 +120,7 @@
       const openDay = !!NF.STUDIO[d.getDay()];
       const sl = past || closed || !openDay ? [] : NF.slots(c.id, date, state.trainer);
       const free = sl.filter(s => s.ok).length;
+      const awayAll = sl.length > 0 && sl.every(s => s.away);
       const mine = myBookingsOn(date).length;
       const picked = state.cart.filter(x => x.date === date).length;
       if (!firstFree && free) firstFree = date;
@@ -127,7 +128,7 @@
       if (closed) info = closed.reason;
       else if (!openDay) info = 'Cerrado';
       else if (past) info = '';
-      else info = free ? `${free} libre${free > 1 ? 's' : ''}` : mine ? 'Tu sesión' : 'Completo';
+      else info = free ? `${free} libre${free > 1 ? 's' : ''}` : mine ? 'Tu sesión' : awayAll ? 'No disponible' : 'Completo';
       const cls = ['cal-day'];
       if (past) cls.push('is-past');
       if (closed || !openDay) cls.push('is-closed');
@@ -182,7 +183,7 @@
       let sub;
       if (s.mine) sub = 'Reservada';
       else if (s.kind === 'grupo') sub = s.free > 0 ? `${NF.trainer(s.trainer).name} · ${s.free} de ${s.cap} plazas` : 'Grupo completo';
-      else sub = s.ok ? NF.trainer(s.trainer).name : 'Ocupado';
+      else sub = s.ok ? NF.trainer(s.trainer).name : s.away ? 'No disponible' : 'Ocupado';
       const cls = 'slot' + (s.mine ? '.is-mine' : '') + (picked ? '.is-picked' : '') + (!s.ok && !s.mine ? '.is-off' : '');
       ul.append(h('li', null, h('button.' + cls, {
         type: 'button', disabled: !s.ok && !picked, 'aria-pressed': String(picked),
@@ -264,46 +265,73 @@
 
   /* Pasarela de pago simulada. En producción: Stripe Checkout (tarjeta,
      Apple Pay, Google Pay y domiciliación SEPA) y el webhook confirma el pago. */
+  /* Pago del bono. Dos caminos:
+     - Tarjeta de crédito o débito → en producción abre Stripe Checkout y el
+       pago queda confirmado al momento.
+     - Transferencia o Bizum → se muestran los datos y el concepto; el cliente
+       reserva ya y el pago queda pendiente hasta que el dueño lo confirma. */
+  function copyBtn(text) {
+    const b = h('button.chip-copy', { type: 'button', onclick: async () => {
+      try { await navigator.clipboard.writeText(text); b.textContent = 'Copiado'; } catch (e) { b.textContent = 'Selecciona y copia'; }
+      setTimeout(() => { b.textContent = 'Copiar'; }, 1600);
+    } }, 'Copiar');
+    return b;
+  }
   function payModal(month) {
     return new Promise(resolve => {
       const c = me();
       const u = NF.usage(c.id, month);
-      let method = c.method === 'sepa' ? 'sepa' : 'card';
       let result = null;
-      const opts = [
-        ['card', 'Tarjeta', 'Visa, Mastercard, Apple Pay o Google Pay. Se cobra ahora.'],
-        ['sepa', 'Domiciliación bancaria', 'Con tu IBAN. Se cobra ahora y cada mes de forma automática.'],
-        ['cash', 'Pagar en el estudio', 'Efectivo o transferencia. Reservas ya y lo confirmamos al recibirlo.']
-      ];
-      const radios = h('div.pay-opts', { role: 'radiogroup', 'aria-label': 'Forma de pago' }, opts.map(([v, t, d]) => {
-        const id = 'pm-' + v;
-        return h('div.pay-opt', null,
-          h('input', { type: 'radio', name: 'pm', id, value: v, checked: v === method, onchange: () => { method = v; updateBtn(); } }),
-          h('label', { for: id }, h('strong', null, t), h('small', null, d)));
-      }));
-      const payBtn = btn('', { cls: 'btn--dark', onclick: go });
-      const updateBtn = () => {
-        const t = method === 'cash' ? 'Reservar y pagar en el estudio' : `Pagar ${NF.money(u.price)}`;
-        payBtn.querySelectorAll('.roll span').forEach(s => { s.textContent = t; });
-      };
-      updateBtn();
-      const body = h('div.pay', null,
-        h('div.pay__sum', null,
-          h('div', null, h('span', null, `Bono ${plan().name}`), h('small', null, `${NF.monthLabel(month)} · ${u.total} sesiones`)),
-          h('strong', null, NF.money(u.price))),
-        radios,
-        h('p.pay__proto', null, h('span.tag-proto', null, 'Prototipo'), ' No se cobra nada. En la versión real aquí se abre la pasarela segura de Stripe y los datos de pago nunca pasan por la web de Nordfit.'));
-      const m = modal({ title: 'Pago del bono', body, actions: [h('button.link-btn', { type: 'button', onclick: () => m.close() }, 'Cancelar'), payBtn], onClose: () => resolve(result) });
-      function go() {
-        payBtn.disabled = true;
-        payBtn.classList.add('is-loading');
-        setTimeout(() => {
-          NF.pay(c.id, month, method);
-          result = method;
-          toast(method === 'cash' ? 'Anotado: pagarás en el estudio.' : `Pago de ${NF.money(u.price)} completado.`, 'ok');
-          m.close();
-        }, 900);
+      const concept = `NORDFIT ${c.name.split(' ')[0]} ${NF.monthName(month)}`.toUpperCase();
+      const summary = h('div.pay__sum', null,
+        h('div', null, h('span', null, `Bono ${plan().name}`), h('small', null, `${NF.cap(NF.monthLabel(month))} · ${u.total} sesiones`)),
+        h('strong', null, NF.money(u.price)));
+      const body = h('div.pay');
+      const m = modal({ title: 'Pago del bono', body, onClose: () => resolve(result) });
+      const done = (method, msg) => { NF.pay(c.id, month, method); result = method; toast(msg, 'ok'); m.close(); };
+
+      // Paso 1: elegir cómo pagar
+      const choose = () => body.replaceChildren(summary,
+        h('div.pay-choices', null,
+          h('button.pay-choice', { type: 'button', onclick: card },
+            h('span.pay-choice__t', null, 'Tarjeta de crédito o débito'),
+            h('span.pay-choice__d', null, 'Visa, Mastercard, Apple Pay o Google Pay. Queda pagado al momento.'),
+            icon('right', 'pay-choice__ic')),
+          h('button.pay-choice', { type: 'button', onclick: transfer },
+            h('span.pay-choice__t', null, 'Transferencia bancaria o Bizum'),
+            h('span.pay-choice__d', null, 'Te damos los datos. Reservas ya y lo confirmamos al recibirlo.'),
+            icon('right', 'pay-choice__ic'))),
+        h('p.pay__proto', null, h('span.tag-proto', null, 'Prototipo'), ' No se cobra nada.'));
+
+      // Tarjeta: en producción, redirección a Stripe Checkout
+      function card() {
+        body.replaceChildren(summary,
+          h('div.pay-wait', null, h('span.pay-spin', { 'aria-hidden': 'true' }), h('p', null, 'Abriendo la pasarela segura de Stripe…')),
+          h('p.pay__proto', null, h('span.tag-proto', null, 'Prototipo'), ' En la versión real se abre la página de pago de Stripe. Los datos de la tarjeta nunca pasan por la web de Nordfit.'));
+        setTimeout(() => done('card', `Pago de ${NF.money(u.price)} completado.`), 1400);
       }
+
+      // Transferencia o Bizum: datos para pagar y aviso de que ya está hecho
+      function transfer() {
+        let how = 'bizum';
+        const row = (label, value, copy) => h('div.bank-row', null, h('dt', null, label), h('dd', null, h('span', null, value), copy ? copyBtn(copy) : null));
+        const tabs = h('div.choices.choices--dark', { role: 'radiogroup', 'aria-label': 'Cómo vas a pagar' },
+          [['bizum', 'Bizum'], ['transfer', 'Transferencia']].map(([v, t]) => [
+            h('input', { type: 'radio', name: 'how', id: 'how-' + v, value: v, checked: v === how, onchange: () => { how = v; paint(); } }),
+            h('label', { for: 'how-' + v }, t)]));
+        const data = h('dl.bank');
+        const paint = () => data.replaceChildren(...(how === 'bizum'
+          ? [row('Envía un Bizum a', NF.BANK.bizum, NF.BANK.bizum.replace(/\s/g, '')), row('Importe', NF.money(u.price)), row('Concepto', concept, concept)]
+          : [row('Titular', NF.BANK.holder), row('IBAN', NF.BANK.iban, NF.BANK.iban.replace(/\s/g, '')), row('Importe', NF.money(u.price)), row('Concepto', concept, concept)]));
+        paint();
+        body.replaceChildren(summary, tabs, data,
+          h('p.pay__note', null, 'Pon el concepto tal cual para que identifiquemos tu pago. Tus reservas quedan hechas y el pago aparece como pendiente hasta que lo comprobemos.'),
+          h('p.pay__proto', null, h('span.tag-proto', null, 'Prototipo'), ' El IBAN es de ejemplo: el dueño pondrá el suyo.'),
+          h('div.pay-actions', null,
+            h('button.link-btn', { type: 'button', onclick: choose }, 'Volver'),
+            btn('Ya he hecho el pago', { cls: 'btn--dark', noIcon: true, onclick: () => done(how, 'Gracias. Lo confirmaremos en cuanto lo recibamos.') })));
+      }
+      choose();
     });
   }
 
@@ -362,12 +390,12 @@
     const pays = NF.db().payments.filter(p => p.client === c.id).sort((a, b) => b.month.localeCompare(a.month));
     const cards = [cur, next].map(m => {
       const u = NF.usage(c.id, m);
-      const st = u.paid ? status('paid', `Pagado · ${NF.METHODS[u.payment.method]}`) : u.promised ? status('pending', 'Pagarás en el estudio') : status('pending', 'Pendiente');
+      const st = u.paid ? status('paid', `Pagado · ${NF.METHODS[u.payment.method]}`) : u.promised ? status('pending', 'Pendiente de confirmar') : status('pending', 'Pendiente');
       return h('article.bill' + (u.paid ? '' : '.bill--due'), null,
         h('div.bill__top', null, h('span.kicker', null, m === cur ? 'Este mes' : 'Próximo mes'), st),
         h('h3.display', null, NF.monthName(m)),
         h('p.bill__amt', null, h('b', null, u.price), h('span', null, ' € · ' + plan().name)),
-        u.paid ? null : btn(u.promised ? 'Pagar ahora online' : 'Pagar bono', { cls: 'btn--dark', onclick: async () => { if (await payModal(m)) renderAll(); } }));
+        u.paid ? null : btn(u.promised ? 'Pagar con tarjeta' : 'Pagar bono', { cls: 'btn--dark', onclick: async () => { if (await payModal(m)) renderAll(); } }));
     });
     const row = p => h('tr', null,
       h('td', null, NF.cap(NF.monthLabel(p.month))),
@@ -427,6 +455,8 @@
     render[open]();
     renderMobileBar();
   }
+
+  window.addEventListener('nf:data', () => { if (!document.querySelector('dialog[open]')) renderAll(); });
 
   renderHead();
   const start = (location.hash || '').slice(1);

@@ -11,29 +11,50 @@
   const cur = NF.thisMonth();
   const state = { view: 'resumen', week: monday(new Date()), trainer: 'all', payMonth: cur, calMonth: cur, q: '', plan: 'all' };
 
-  /* ---------------- Acceso ---------------- */
+  /* ---------------- Acceso ----------------
+     Sergio (dueño) ve todo el panel. Jules y Adrián, solo su día, su agenda
+     y su calendario para bloquear días u horas. */
+  const me = () => NF.session.admin();
+  const isOwner = () => me()?.role === 'owner';
+  const NAV = {
+    owner: [['resumen', 'Resumen'], ['agenda', 'Agenda'], ['clientes', 'Clientes'], ['pagos', 'Pagos'], ['calendario', 'Calendario'], ['stats', 'Estadísticas']],
+    trainer: [['hoy', 'Mi día'], ['agenda', 'Mi agenda'], ['calendario', 'Mi calendario']]
+  };
+  const navEl = document.querySelector('[data-nav]');
+  const userEl = document.querySelector('[data-user]');
+  let navBtns = [];
   function boot() {
-    if (NF.session.admin()) { loginEl.hidden = true; appEl.hidden = false; NF.ensureMonth(cur); go((location.hash || '#resumen').slice(1)); }
-    else { appEl.hidden = true; loginEl.hidden = false; loginEl.querySelector('input').focus(); }
+    const s = me();
+    if (s && NAV[s.role]) {
+      loginEl.hidden = true; appEl.hidden = false;
+      state.trainer = s.role === 'owner' ? 'all' : s.trainer;
+      navBtns = NAV[s.role].map(([v, t]) => h('button', { type: 'button', 'data-view': v, onclick: () => go(v) }, t));
+      navEl.replaceChildren(...navBtns);
+      userEl.textContent = `${s.name} · ${s.role === 'owner' ? 'dueño' : 'entrenador'}`;
+      if (s.role === 'owner') NF.ensureMonth(cur);
+      go((location.hash || '').slice(1));
+    } else {
+      NF.session.logoutAdmin();
+      appEl.hidden = true; loginEl.hidden = false; loginEl.querySelector('input').focus();
+    }
   }
   const form = loginEl.querySelector('form');
   form.addEventListener('submit', e => {
     e.preventDefault();
     const ok = NF.session.loginAdmin(form.user.value, form.pass.value);
     form.querySelector('.adm-form__err').hidden = !!ok;
-    if (ok) boot();
+    if (ok) { history.replaceState(null, '', location.pathname); boot(); }
   });
-  loginEl.querySelector('[data-fill]').addEventListener('click', () => { form.user.value = 'admin@nordfit.es'; form.pass.value = 'nordfit'; form.requestSubmit(); });
+  loginEl.querySelectorAll('[data-fill]').forEach(b => b.addEventListener('click', () => { form.user.value = b.dataset.fill; form.pass.value = 'nordfit'; form.requestSubmit(); }));
   document.querySelector('[data-logout]').addEventListener('click', () => { NF.session.logoutAdmin(); boot(); });
   document.querySelector('[data-reset]').addEventListener('click', async () => {
-    if (await confirm('Restablecer datos de prueba', 'Se borran todos los cambios hechos en el prototipo y se vuelve a los datos de ejemplo.', 'Restablecer')) { NF.reset(); NF.session.loginAdmin('admin@nordfit.es', 'nordfit'); NF.ensureMonth(cur); go(state.view); toast('Datos restablecidos.'); }
+    if (await confirm('Restablecer datos de prueba', 'Se borran todos los cambios hechos en el prototipo y se vuelve a los datos de ejemplo.', 'Restablecer')) { NF.reset(); boot(); toast('Datos restablecidos.'); }
   });
 
   /* ---------------- Navegación ---------------- */
-  const navBtns = [...document.querySelectorAll('[data-view]')];
-  navBtns.forEach(b => b.addEventListener('click', () => go(b.dataset.view)));
   function go(view) {
-    if (!views[view]) view = 'resumen';
+    const allowed = NAV[me().role].map(x => x[0]);
+    if (!allowed.includes(view)) view = allowed[0];
     state.view = view;
     navBtns.forEach(b => b.setAttribute('aria-current', b.dataset.view === view ? 'page' : 'false'));
     main.replaceChildren(views[view]());
@@ -42,6 +63,7 @@
     try { history.replaceState(null, '', '#' + view); } catch (e) { /* file:// */ }
   }
   const refresh = () => main.replaceChildren(views[state.view]());
+  window.addEventListener('nf:data', () => { if (me() && !appEl.hidden && !document.querySelector('dialog[open]')) refresh(); });
 
   /* ---------------- Utilidades ---------------- */
   function monday(d) { const x = new Date(d); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; }
@@ -66,7 +88,7 @@
     const c = NF.client(p.client);
     const f = {
       status: preset.status || p.status,
-      method: preset.method || (p.status === 'paid' || p.method === 'cash' || p.method === 'transfer' ? p.method : 'cash')
+      method: preset.method || (p.status === 'paid' || ['cash', 'transfer', 'bizum'].includes(p.method) ? p.method : 'cash')
     };
     const radio = (name, value, label, checked, onchange) => [
       h('input', { type: 'radio', name, id: `${name}-${value}`, value, checked, onchange }),
@@ -76,7 +98,7 @@
       radio('ep-st', 'paid', 'Pagado', f.status === 'paid', () => { f.status = 'paid'; sync(); }),
       radio('ep-st', 'pending', 'Pendiente', f.status === 'pending', () => { f.status = 'pending'; sync(); }));
     const methodGroup = h('div.choices.choices--dark', { role: 'radiogroup', 'aria-labelledby': 'ep-m-l' },
-      ['cash', 'transfer', 'card', 'sepa'].map(v => radio('ep-m', v, NF.METHODS[v], f.method === v, () => { f.method = v; })));
+      ['cash', 'transfer', 'bizum', 'card', 'sepa'].map(v => radio('ep-m', v, NF.METHODS[v], f.method === v, () => { f.method = v; })));
     const date = h('input', { id: 'ep-date', type: 'date', value: p.paidAt || NF.today(), max: NF.today() });
     const amount = h('input', { id: 'ep-amt', type: 'number', min: '0', step: '1', value: p.amount, inputmode: 'numeric' });
     const note = h('input', { id: 'ep-note', value: p.note || '', maxlength: '80', placeholder: 'Ej.: en mano a Sergio, descuento por lesión…' });
@@ -200,6 +222,35 @@
     return avail ? Math.round(sessionsIn(days) / avail * 100) : 0;
   }
 
+  /* Mi día: inicio para Jules y Adrián */
+  views.hoy = () => {
+    const tid = me().trainer;
+    const today = NF.today();
+    let day = today;
+    for (let i = 0; i < 7 && (!NF.isOpen(day) || NF.absencesOn(day, tid).some(b => b.allDay)); i++) day = NF.ymd(NF.addDays(NF.parse(day), 1));
+    const mine = b => b.trainer === tid && NF.counts(b);
+    const grouped = groupSlots(NF.db().bookings.filter(b => b.date === day && mine(b)));
+    const week = weekDays(monday(new Date()));
+    const weekN = new Set(NF.db().bookings.filter(b => week.includes(b.date) && mine(b)).map(b => b.date + b.h)).size;
+    const next = NF.absences().filter(b => b.trainer === tid && b.date >= today).sort((a, b) => a.date.localeCompare(b.date));
+    return h('div.view', null,
+      head('Hola,', me().name, h('span.muted', null, NF.cap(NF.dayLabel(today)))),
+      h('div.tiles', null,
+        tile(day === today ? 'Sesiones hoy' : 'Próximo día con sesiones', String(grouped.length), day === today ? '' : NF.cap(NF.dayLabel(day))),
+        tile('Sesiones esta semana', String(weekN), 'Contigo como entrenador'),
+        tile('Próximo bloqueo', next.length ? NF.cap(NF.dayLabel(next[0].date)) : '—', next.length ? (next[0].allDay ? 'Todo el día' : `${next[0].from}–${next[0].to} h`) : 'No tienes bloqueos', '.tile--text')),
+      h('div.adm-cols', null,
+        h('section.card', null,
+          h('h2.card__title', null, day === today ? 'Hoy' : NF.cap(NF.dayLabel(day))),
+          grouped.length ? h('ul.agenda-list', null, grouped.map(g => h('li', null,
+            h('span.agenda-list__h', null, NF.hourLabel(g.h)),
+            h('span', null, h('strong', null, g.label), h('small', null, NF.PLANS[g.kind].name))))) : h('p.muted', null, 'No tienes sesiones reservadas ese día.')),
+        h('section.card', null,
+          h('h2.card__title', null, '¿Vas a faltar?'),
+          h('p.muted', null, 'Marca los días u horas en que no estarás y tus clientes no podrán reservar contigo en ese hueco.'),
+          h('div', null, btn('Bloquear días u horas', { noIcon: true, onclick: () => go('calendario') })))));
+  };
+
   /* Agenda semanal */
   views.agenda = () => {
     const days = weekDays(state.week);
@@ -210,13 +261,14 @@
       h('strong', { 'aria-live': 'polite' }, label),
       h('button.icon-btn.icon-btn--dark', { type: 'button', 'aria-label': 'Semana siguiente', svg: ICON.right, onclick: () => { state.week = NF.addDays(state.week, 7); refresh(); } }),
       h('button.mini-btn', { type: 'button', onclick: () => { state.week = monday(new Date()); refresh(); } }, 'Hoy'));
-    const filt = h('div.chips', { role: 'group', 'aria-label': 'Entrenador' },
+    const filt = !isOwner() ? null : h('div.chips', { role: 'group', 'aria-label': 'Entrenador' },
       [['all', 'Todos'], ...NF.TRAINERS.map(t => [t.id, t.name])].map(([v, t]) => chip(t, { cls: 'chip--dark', pressed: state.trainer === v, onclick: () => { state.trainer = v; refresh(); } })));
 
     const table = h('table.week', null);
     table.append(h('thead', null, h('tr', null, h('th', { scope: 'col' }, h('span.sr-only', null, 'Hora')), days.map(d => {
       const c = NF.closure(d);
-      return h('th', { scope: 'col', class: (d === NF.today() ? 'is-today' : '') + (c ? ' is-closed' : '') }, h('span', null, NF.DAYS[NF.parse(d).getDay()].slice(0, 3)), h('strong', null, NF.parse(d).getDate()), c ? h('small', null, c.reason) : null);
+      const away = NF.absencesOn(d).filter(b => b.allDay && (state.trainer === 'all' || b.trainer === state.trainer)).map(b => NF.trainer(b.trainer).name);
+      return h('th', { scope: 'col', class: (d === NF.today() ? 'is-today' : '') + (c ? ' is-closed' : '') }, h('span', null, NF.DAYS[NF.parse(d).getDay()].slice(0, 3)), h('strong', null, NF.parse(d).getDate()), c ? h('small', null, c.reason) : away.length ? h('small', null, `${away.join(' y ')} no ${away.length > 1 ? 'están' : 'está'}`) : null);
     }))));
     const tb = h('tbody');
     for (let hr = 7; hr <= 21; hr++) {
@@ -224,8 +276,11 @@
       days.forEach(d => {
         const dow = NF.parse(d).getDay();
         const open = NF.STUDIO[dow] && hr >= NF.STUDIO[dow][0] && hr <= NF.STUDIO[dow][1] && !NF.closure(d);
-        const td = h('td', { class: open ? '' : 'is-off' });
+        const awayHere = open ? NF.TRAINERS.filter(t => (state.trainer === 'all' || t.id === state.trainer) && NF.isAbsent(t.id, d, hr)) : [];
+        const allAway = state.trainer !== 'all' && awayHere.length > 0;
+        const td = h('td', { class: !open ? 'is-off' : allAway ? 'is-away' : '' });
         if (open) {
+          awayHere.forEach(t => td.append(h('span.ev-away', null, `${t.name} · no disponible`)));
           const list = NF.db().bookings.filter(b => b.date === d && b.h === hr && NF.counts(b) && (state.trainer === 'all' || b.trainer === state.trainer));
           const groups = groupSlots(list);
           // Grupos fijos aún vacíos también se muestran
@@ -234,8 +289,8 @@
           groups.forEach(g => td.append(h('button.ev.ev--' + g.kind + '.ev--' + g.trainer, { type: 'button', onclick: () => eventModal(g) },
             h('span.ev__who', null, g.kind === 'grupo' ? `Grupo ${g.items.length}/${(NF.db().groups.find(x => x.dow === dow && x.h === hr && x.trainer === g.trainer) || { cap: '?' }).cap}` : g.items.flatMap(clientNames).map(short).join(' y ')),
             h('span.ev__tr', null, NF.trainer(g.trainer).name))));
-          const freeTrainers = NF.TRAINERS.filter(t => (state.trainer === 'all' || t.id === state.trainer) && NF.SHIFTS[t.id][dow] && hr >= NF.SHIFTS[t.id][dow][0] && hr <= NF.SHIFTS[t.id][dow][1] && !NF.trainerBusy(t.id, d, hr));
-          if (freeTrainers.length) td.append(h('button.ev-add', { type: 'button', 'aria-label': `Añadir sesión el ${NF.dayLabel(d)} a las ${NF.hourLabel(hr)}`, onclick: () => addModal(d, hr, freeTrainers), svg: ICON.plus }));
+          const freeTrainers = NF.TRAINERS.filter(t => (state.trainer === 'all' || t.id === state.trainer) && NF.SHIFTS[t.id][dow] && hr >= NF.SHIFTS[t.id][dow][0] && hr <= NF.SHIFTS[t.id][dow][1] && !NF.trainerBusy(t.id, d, hr) && !NF.isAbsent(t.id, d, hr));
+          if (isOwner() && freeTrainers.length) td.append(h('button.ev-add', { type: 'button', 'aria-label': `Añadir sesión el ${NF.dayLabel(d)} a las ${NF.hourLabel(hr)}`, onclick: () => addModal(d, hr, freeTrainers), svg: ICON.plus }));
         }
         tr.append(td);
       });
@@ -243,8 +298,8 @@
     }
     table.append(tb);
     return h('div.view', null,
-      head('Agenda', 'semanal', nav),
-      h('div.toolbar', null, filt, h('p.muted.small', null, 'Toca una sesión para ver detalles o cancelarla. Usa + para reservar en nombre de un cliente.')),
+      head(isOwner() ? 'Agenda' : 'Mi agenda', 'semanal', nav),
+      h('div.toolbar', null, filt, h('p.muted.small', null, isOwner() ? 'Toca una sesión para ver detalles o cancelarla. Usa + para reservar en nombre de un cliente.' : 'Tus sesiones de la semana. Toca una para ver quién viene. Para no estar disponible, ve a «Mi calendario».')),
       h('div.week-wrap', { 'data-lenis-prevent': true }, table));
   };
   function eventModal(g) {
@@ -254,7 +309,7 @@
       body: h('div.stack', null,
         h('p', null, h('strong', null, NF.PLANS[g.kind].name), ` con ${NF.trainer(g.trainer).name}`),
         names.length ? h('ul.plain', null, names.map(c => h('li', null, c.name, ' · ', h('a.u-line', { href: 'tel:+34' + c.phone }, c.phone)))) : h('p.muted', null, 'Nadie apuntado todavía.'),
-        g.items.length ? h('div.stack', null, h('p.muted', null, 'Cancelar libera el hueco y devuelve la sesión al bono del cliente.'),
+        g.items.length && isOwner() ? h('div.stack', null, h('p.muted', null, 'Cancelar libera el hueco y devuelve la sesión al bono del cliente.'),
           h('div.btn-row', null, g.items.map(b => h('button.mini-btn.mini-btn--danger', { type: 'button', onclick: async () => {
             m.close();
             if (await confirm('Cancelar sesión', `Se cancela la sesión de ${clientNames(b).join(' y ')}. Recuerda avisarle.`, 'Cancelar sesión', { danger: true })) { NF.adminCancel(b.id); toast('Sesión cancelada.'); refresh(); }
@@ -407,7 +462,11 @@
         h('tbody', null, rows))) : h('p.muted', null, 'Este mes aún no tiene cargos.'));
   };
 
-  /* Calendario: días cerrados y grupos fijos */
+  /* Calendario: bloqueos por días u horas.
+     Cada entrenador bloquea lo suyo; Sergio, además, puede bloquear a
+     cualquiera o cerrar el estudio entero (festivos). */
+  const visibleAbsences = list => list.filter(b => isOwner() || b.trainer === me().trainer);
+  const absLabel = b => `${NF.trainer(b.trainer).name}${b.allDay ? '' : ` ${b.from}–${b.to} h`}`;
   views.calendario = () => {
     const m = state.calMonth;
     const firstD = NF.parse(m);
@@ -418,23 +477,47 @@
       const date = NF.ymd(d);
       const c = NF.closure(date);
       const open = !!NF.STUDIO[d.getDay()];
-      const n = sessionsIn([date]);
-      grid.append(h('button.cal-day' + (c ? '.is-closed' : '') + (!open ? '.is-past' : '') + (date === NF.today() ? '.is-today' : ''), {
-        type: 'button', disabled: !open, 'aria-label': `${NF.dayLabel(date)}${c ? '. Cerrado: ' + c.reason : '. ' + n + ' sesiones'}`,
-        onclick: () => closureModal(date)
-      }, h('span.cal-day__n', null, d.getDate()), h('span.cal-day__info', null, c ? c.reason : open ? (n ? `${n} ses.` : '') : 'Cerrado')));
+      const abs = visibleAbsences(NF.absencesOn(date));
+      const info = c ? c.reason : !open ? 'Cerrado' : abs.length ? abs.map(absLabel).join(' · ') : '';
+      grid.append(h('button.cal-day' + (c ? '.is-closed' : '') + (!open ? '.is-past' : '') + (abs.length && !c ? '.has-away' : '') + (date === NF.today() ? '.is-today' : ''), {
+        type: 'button', disabled: !open || (!isOwner() && !!c), 'aria-label': `${NF.dayLabel(date)}. ${info || 'Sin bloqueos'}`,
+        onclick: () => dayModal(date)
+      }, h('span.cal-day__n', null, d.getDate()), h('span.cal-day__info', null, info)));
     }
     const nav = h('div.week-nav', null,
       h('button.icon-btn.icon-btn--dark', { type: 'button', 'aria-label': 'Mes anterior', svg: ICON.left, onclick: () => { state.calMonth = NF.addMonths(m, -1); refresh(); } }),
       h('strong', { 'aria-live': 'polite' }, NF.monthLabel(m)),
       h('button.icon-btn.icon-btn--dark', { type: 'button', 'aria-label': 'Mes siguiente', svg: ICON.right, onclick: () => { state.calMonth = NF.addMonths(m, 1); refresh(); } }));
+
+    // Próximos bloqueos (cierres del estudio + ausencias)
+    const today = NF.today();
+    const upcoming = [
+      ...NF.db().closures.filter(c => c.date >= today).map(c => ({ date: c.date, text: `Estudio cerrado · ${c.reason}`, remove: isOwner() ? () => { NF.toggleClosure(c.date); toast('Día abierto.', 'ok'); refresh(); } : null })),
+      ...visibleAbsences(NF.absences()).filter(b => b.date >= today).map(b => ({ date: b.date, text: `${absLabel(b)}${b.allDay ? ' · todo el día' : ''}${b.reason ? ' · ' + b.reason : ''}`, remove: () => { NF.removeAbsence(b.id); toast('Bloqueo quitado.', 'ok'); refresh(); } }))
+    ].sort((x, y) => x.date.localeCompare(y.date)).slice(0, 12);
+    const list = h('section.card', null,
+      h('h2.card__title', null, isOwner() ? 'Próximos bloqueos' : 'Tus próximos bloqueos'),
+      upcoming.length ? h('ul.group-list', null, upcoming.map(u => h('li', null,
+        h('span', null, h('strong', null, NF.cap(NF.dayLabel(u.date))), h('small', null, u.text)),
+        u.remove ? h('button.mini-btn.mini-btn--danger', { type: 'button', onclick: u.remove }, 'Quitar') : null)))
+        : h('p.muted', null, 'No hay bloqueos próximos.'));
+
+    const left = h('section.card', null,
+      h('h2.card__title', null, isOwner() ? 'Bloquear días u horas' : 'Cuándo no estás'),
+      h('p.muted.small', null, isOwner()
+        ? 'Toca un día para bloquear a una persona (todo el día o unas horas) o cerrar el estudio entero, por ejemplo un festivo. Los clientes no podrán reservar en ese hueco.'
+        : 'Toca un día para marcar que no vas a estar, todo el día o solo unas horas. Tus clientes no podrán reservar contigo en ese hueco.'),
+      grid);
+    if (!isOwner()) return h('div.view', null, head('Mi', 'calendario', nav), h('div.adm-cols', null, left, list));
+
     const groups = NF.db().groups.slice().sort((a, b) => ((a.dow + 6) % 7 - (b.dow + 6) % 7) || a.h - b.h);
     const shifts = NF.TRAINERS.map(t => h('li', null, h('strong', null, t.name + ': '), [1, 2, 3, 4, 5, 6].filter(d => NF.SHIFTS[t.id][d]).map(d => `${NF.DAYS[d].slice(0, 3)} ${NF.SHIFTS[t.id][d][0]}–${NF.SHIFTS[t.id][d][1] + 1} h`).join(' · ')));
     return h('div.view', null,
       head('Calendario', 'y horarios', nav),
       h('div.adm-cols', null,
-        h('section.card', null, h('h2.card__title', null, 'Días cerrados'), h('p.muted.small', null, 'Toca un día para cerrarlo (festivo, vacaciones, formación…) o volver a abrirlo. Los clientes ya no podrán reservar ese día.'), grid),
+        left,
         h('div.stack', null,
+          list,
           h('section.card', null,
             h('h2.card__title', null, 'Grupos reducidos fijos'),
             h('ul.group-list', null, groups.map(g => h('li', null,
@@ -443,22 +526,62 @@
             h('button.mini-btn', { type: 'button', onclick: () => groupModal(null) }, icon('plus'), 'Añadir grupo')),
           h('section.card', null, h('h2.card__title', null, 'Turnos de entrenadores'), h('ul.plain', null, shifts), h('p.muted.small', null, 'Horario orientativo del prototipo: hay que confirmarlo con el equipo.')))));
   };
-  async function closureModal(date) {
+
+  // Ventana de un día: bloqueos que ya tiene y formulario para añadir uno nuevo
+  function dayModal(date) {
+    const dow = NF.parse(date).getDay();
+    const [openH, lastH] = NF.STUDIO[dow];
     const c = NF.closure(date);
-    if (c) {
-      if (await confirm('Abrir día', `El ${NF.dayLabel(date)} vuelve a estar disponible para reservar.`, 'Abrir día')) { NF.toggleClosure(date); toast('Día abierto.', 'ok'); refresh(); }
-      return;
-    }
-    const affected = NF.affectedBy(date);
-    const reason = h('input', { id: 'cl-r', value: 'Festivo', maxlength: '40' });
+    const abs = visibleAbsences(NF.absencesOn(date));
+    const f = { who: isOwner() ? 'sergio' : me().trainer, allDay: true, from: openH, to: openH + 2 };
+    const radio = (name, value, label, checked, onchange) => [
+      h('input', { type: 'radio', name, id: `${name}-${value}`, value, checked, onchange }),
+      h('label', { for: `${name}-${value}` }, label)];
+
+    const existing = (c || abs.length) ? h('div.stack.stack--tight', null,
+      h('p.field-label', null, 'Ya bloqueado este día'),
+      h('ul.group-list', null,
+        c ? h('li', null, h('span', null, h('strong', null, 'Estudio cerrado'), h('small', null, c.reason)),
+          isOwner() ? h('button.mini-btn', { type: 'button', onclick: () => { NF.toggleClosure(date); m.close(); toast('Día abierto.', 'ok'); refresh(); } }, 'Abrir día') : null) : null,
+        abs.map(b => h('li', null, h('span', null, h('strong', null, absLabel(b)), h('small', null, (b.allDay ? 'Todo el día' : 'Unas horas') + (b.reason ? ' · ' + b.reason : ''))),
+          h('button.mini-btn.mini-btn--danger', { type: 'button', onclick: () => { NF.removeAbsence(b.id); m.close(); toast('Bloqueo quitado.', 'ok'); refresh(); } }, 'Quitar'))))) : null;
+
+    const hours = h('div.adm-form.adm-form--grid', null,
+      h('div', null, h('label', { for: 'bl-from' }, 'Desde'), h('select', { id: 'bl-from', onchange: e => { f.from = +e.target.value; } }, Array.from({ length: lastH - openH + 1 }, (_, i) => openH + i).map(x => h('option', { value: x, selected: x === f.from }, NF.hourLabel(x))))),
+      h('div', null, h('label', { for: 'bl-to' }, 'Hasta'), h('select', { id: 'bl-to', onchange: e => { f.to = +e.target.value; } }, Array.from({ length: lastH - openH + 1 }, (_, i) => openH + 1 + i).map(x => h('option', { value: x, selected: x === f.to }, NF.hourLabel(x))))));
+    hours.hidden = true;
+    const scope = h('div.choices.choices--dark', { role: 'radiogroup', 'aria-labelledby': 'bl-len' },
+      radio('bl-len', 'day', 'Todo el día', true, () => { f.allDay = true; hours.hidden = true; }),
+      radio('bl-len', 'hours', 'Solo unas horas', false, () => { f.allDay = false; hours.hidden = false; }));
+    const scopeWrap = h('div.stack.stack--tight', null, h('p.field-label', { id: 'bl-len' }, '¿Cuánto tiempo?'), scope, hours);
+    const who = isOwner() ? h('div.stack.stack--tight', null, h('p.field-label', { id: 'bl-who' }, '¿Quién no va a estar?'),
+      h('div.choices.choices--dark', { role: 'radiogroup', 'aria-labelledby': 'bl-who' },
+        NF.TRAINERS.map(t => radio('bl-who', t.id, t.name, t.id === f.who, () => { f.who = t.id; scopeWrap.hidden = false; })),
+        c ? null : radio('bl-who', 'all', 'Nadie: estudio cerrado', false, () => { f.who = 'all'; scopeWrap.hidden = true; }))) : null;
+    const reason = h('input', { id: 'bl-r', maxlength: '40', placeholder: 'Vacaciones, médico, festivo…' });
+
     const m = modal({
-      title: `Cerrar el ${NF.dayLabel(date)}`,
-      body: h('div.adm-form', null, h('label', { for: 'cl-r' }, 'Motivo (lo verán los clientes)'), reason,
-        affected.length ? h('div.notice.notice--dark', null, icon('alert'), h('p', null, h('strong', null, `Hay ${affected.length} sesiones reservadas ese día: `), [...new Set(affected.flatMap(clientNames))].join(', '), '. Se cancelan y vuelven a su bono. En la versión real reciben un email automático.')) : null),
-      actions: [h('button.link-btn', { type: 'button', onclick: () => m.close() }, 'Cancelar'), btn('Cerrar día', { noIcon: true, onclick: () => {
-        affected.forEach(b => NF.adminCancel(b.id));
-        NF.toggleClosure(date, reason.value.trim() || 'Cerrado');
-        m.close(); toast('Día cerrado.', 'ok'); refresh();
+      title: NF.cap(NF.dayLabel(date)),
+      body: h('div.stack', null, existing,
+        c && !isOwner() ? h('p.muted', null, 'El estudio está cerrado este día.') : [
+          h('p.field-label', null, existing ? 'Añadir otro bloqueo' : 'Nuevo bloqueo'),
+          who, scopeWrap,
+          h('div.adm-form', null, h('label', { for: 'bl-r' }, 'Motivo (opcional, solo lo ve el equipo)'), reason)]),
+      actions: c && !isOwner() ? [] : [h('button.link-btn', { type: 'button', onclick: () => m.close() }, 'Cancelar'), btn('Bloquear', { noIcon: true, onclick: async () => {
+        if (f.who !== 'all' && !f.allDay && f.to <= f.from) { toast('La hora de fin tiene que ser posterior a la de inicio.', 'warn'); return; }
+        const block = { trainer: f.who, date, allDay: f.allDay, from: f.from, to: f.to, reason: reason.value.trim() };
+        const affected = f.who === 'all' ? NF.affectedBy(date) : NF.affectedByAbsence(block);
+        m.close();
+        if (affected.length) {
+          const names = [...new Set(affected.flatMap(clientNames))].join(', ');
+          const ok = await confirm('Hay sesiones reservadas', `En ese hueco hay ${affected.length} ${affected.length > 1 ? 'sesiones reservadas' : 'sesión reservada'} (${names}). Si bloqueas, se cancelan y la sesión vuelve a su bono. En la versión real reciben un email automático.`, 'Bloquear y cancelar', { danger: true });
+          if (!ok) return;
+          affected.forEach(b => NF.adminCancel(b.id));
+        }
+        if (f.who === 'all') NF.toggleClosure(date, block.reason || 'Cerrado');
+        else NF.addAbsence(block);
+        toast('Bloqueo guardado.', 'ok');
+        refresh();
       } })]
     });
   }

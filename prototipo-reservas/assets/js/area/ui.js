@@ -52,13 +52,13 @@ window.UI = (() => {
   function modal({ title, body, actions = [], wide = false, onClose }) {
     const dlg = h('dialog.modal' + (wide ? '.modal--wide' : ''), { 'aria-label': title, 'data-lenis-prevent': true });
     const close = () => { dlg.close(); };
-    dlg.append(
+    dlg.append(...[
       h('div.modal__head', null,
         h('h2.modal__title', null, title),
         h('button.modal__x', { type: 'button', 'aria-label': 'Cerrar', onclick: close, svg: ICON.close })),
       h('div.modal__body', null, body),
       actions.length ? h('div.modal__foot', null, actions) : null
-    );
+    ].filter(Boolean));
     dlg.addEventListener('close', () => { dlg.remove(); onClose && onClose(); });
     dlg.addEventListener('click', e => { if (e.target === dlg) close(); });
     document.body.append(dlg);

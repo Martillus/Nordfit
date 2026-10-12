@@ -9,8 +9,9 @@ window.NF = (() => {
 
   /* ---------------- Catálogo fijo ---------------- */
   const TRAINERS = [
-    { id: 'sergio', name: 'Sergio' },
-    { id: 'jules', name: 'Jules' }
+    { id: 'sergio', name: 'Sergio', email: 'sergio@nordfit.es', role: 'owner' },
+    { id: 'jules', name: 'Jules', email: 'jules@nordfit.es', role: 'trainer' },
+    { id: 'adrian', name: 'Adrián', email: 'adrian@nordfit.es', role: 'trainer' }
   ];
   const PLANS = {
     personal: { id: 'personal', name: 'Personal 1:1', short: '1:1', price: 360, single: 50, sessions: 8 },
@@ -21,14 +22,18 @@ window.NF = (() => {
     card: 'Tarjeta',
     sepa: 'Domiciliación',
     cash: 'Efectivo',
-    transfer: 'Transferencia'
+    transfer: 'Transferencia',
+    bizum: 'Bizum'
   };
+  // Datos para pagar por transferencia o Bizum (de ejemplo: los pone el dueño)
+  const BANK = { holder: 'Nordfit Entrenamiento Personal', iban: 'ES00 0000 0000 0000 0000 0000', bizum: '687 38 69 17' };
   // Horario del estudio: hora de inicio de cada sesión de 60 min
   const STUDIO = { 1: [7, 21], 2: [7, 21], 3: [7, 21], 4: [7, 21], 5: [7, 21], 6: [9, 13] };
   // Turnos de cada entrenador (orientativo, editable cuando lo confirme el dueño)
   const SHIFTS = {
     sergio: { 1: [7, 14], 2: [7, 14], 3: [7, 14], 4: [7, 14], 5: [7, 14], 6: [9, 13] },
-    jules: { 1: [14, 21], 2: [14, 21], 3: [14, 21], 4: [14, 21], 5: [14, 21] }
+    jules: { 1: [14, 21], 2: [14, 21], 3: [14, 21], 4: [14, 21], 5: [14, 21] },
+    adrian: { 1: [9, 16], 2: [9, 16], 3: [9, 16], 4: [9, 16], 5: [9, 16], 6: [9, 13] }
   };
   const CANCEL_HOURS = 24;
   const MIN_LEAD_HOURS = 2;
@@ -62,12 +67,15 @@ window.NF = (() => {
   function db() {
     if (mem) return mem;
     const raw = ls.get(KEY);
-    if (raw) { try { mem = JSON.parse(raw); if (mem.v === 1) return mem; } catch (e) { /* datos corruptos */ } }
+    if (raw) { try { mem = JSON.parse(raw); if (mem.v === 2) return mem; } catch (e) { /* datos corruptos */ } }
     mem = seed();
     save();
     return mem;
   }
   function save() { ls.set(KEY, JSON.stringify(mem)); }
+  // Si otra pestaña cambia los datos (p. ej. el cliente paga y el panel está
+  // abierto), se vuelven a leer y se avisa a la página para que se repinte
+  try { window.addEventListener('storage', e => { if (e.key === KEY) { mem = null; window.dispatchEvent(new CustomEvent('nf:data')); } }); } catch (e) { /* sin almacenamiento */ }
   function reset() { ls.del(KEY); ls.del(SKEY); mem = null; db(); }
   const uid = p => p + Math.random().toString(36).slice(2, 9);
 
@@ -80,14 +88,14 @@ window.NF = (() => {
     const people = [
       ['Lucía Fernández', 'personal', 'sergio'], ['Elías Romero', 'personal', 'jules'], ['Isaac Arroyo', 'personal', 'sergio'],
       ['Beatriz Díaz', 'personal', 'jules'], ['Marta Gil', 'personal', 'sergio'], ['Pablo Herrera', 'personal', 'jules'],
-      ['Carmen Ortiz', 'personal', 'sergio'], ['Javier Molina', 'personal', 'jules'], ['Nuria Castro', 'personal', 'sergio'],
-      ['Daniel Rubio', 'personal', 'jules'], ['Alba Navarro', 'personal', 'sergio'], ['Hugo Serrano', 'personal', 'jules'],
+      ['Carmen Ortiz', 'personal', 'adrian'], ['Javier Molina', 'personal', 'jules'], ['Nuria Castro', 'personal', 'sergio'],
+      ['Daniel Rubio', 'personal', 'adrian'], ['Alba Navarro', 'personal', 'sergio'], ['Hugo Serrano', 'personal', 'adrian'],
       ['Sara Prieto', 'pareja', 'jules'], ['Óscar Prieto', 'pareja', 'jules'],
       ['Irene Vidal', 'pareja', 'sergio'], ['Andrés Vidal', 'pareja', 'sergio'],
       ['Claudia Ramos', 'pareja', 'jules'], ['Teresa Ramos', 'pareja', 'jules'],
       ['Raúl Medina', 'grupo', 'jules'], ['Paula Iglesias', 'grupo', 'jules'], ['Sofía Cano', 'grupo', 'sergio'],
       ['Diego Lozano', 'grupo', 'sergio'], ['Laura Pascual', 'grupo', 'jules'], ['Miguel Santos', 'grupo', 'sergio'],
-      ['Elena Vega', 'grupo', 'jules'], ['Adrián León', 'grupo', 'sergio'], ['Inés Calvo', 'grupo', 'jules'],
+      ['Elena Vega', 'grupo', 'jules'], ['Rubén León', 'grupo', 'sergio'], ['Inés Calvo', 'grupo', 'jules'],
       ['Rocío Marín', 'grupo', 'sergio']
     ];
     const now = new Date();
@@ -124,7 +132,13 @@ window.NF = (() => {
     [[`${y}-10-12`, 'Fiesta Nacional'], [`${y}-11-01`, 'Todos los Santos'], [`${y}-11-09`, 'Almudena'], [`${y}-12-08`, 'Inmaculada'], [`${y}-12-25`, 'Navidad']]
       .forEach(([date, reason]) => closures.push({ id: uid('x'), date, reason }));
 
-    const data = { v: 1, clients, groups, closures, bookings: [], payments: [], reminders: [] };
+    // Ausencias de ejemplo: un día entero de Sergio y unas horas de Jules
+    const firstWeekday = (from, dow) => { let d = addDays(from, 1); while (d.getDay() !== dow) d = addDays(d, 1); return ymd(d); };
+    const absences = [
+      { id: uid('a'), trainer: 'sergio', date: firstWeekday(addDays(now, 5), 5), allDay: true, from: null, to: null, reason: 'Formación' },
+      { id: uid('a'), trainer: 'jules', date: firstWeekday(addDays(now, 2), 3), allDay: false, from: 16, to: 18, reason: 'Médico' }
+    ];
+    const data = { v: 2, clients, groups, closures, absences, bookings: [], payments: [], reminders: [] };
 
     // Pagos: últimos 6 meses
     for (let k = -5; k <= 0; k++) {
@@ -142,6 +156,7 @@ window.NF = (() => {
 
     // Reservas: mes anterior y mes actual
     const busy = new Set(data.closures.map(x => x.date));
+    const absentSeed = (tid, date, h) => absences.some(b => b.trainer === tid && b.date === date && (b.allDay || (h >= b.from && h < b.to)));
     const usedTrainer = new Set();
     const groupCount = {};
     const add = (b) => data.bookings.push(Object.assign({ id: uid('b'), status: 'ok', created: b.date }, b));
@@ -166,7 +181,7 @@ window.NF = (() => {
           const dow = parse(date).getDay();
           if (c.plan === 'grupo') {
             const g = data.groups.find(gr => gr.dow === dow);
-            if (!g) continue;
+            if (!g || absentSeed(g.trainer, date, g.h)) continue;
             const key = date + g.h;
             if ((groupCount[key] || 0) >= g.cap) continue;
             if (data.bookings.some(b => b.date === date && b.h === g.h && b.clients.includes(c.id))) continue;
@@ -177,7 +192,7 @@ window.NF = (() => {
             if (!sh) continue;
             const h = sh[0] + Math.floor(rnd() * (sh[1] - sh[0] + 1));
             const key = c.trainer + date + h;
-            if (usedTrainer.has(key) || data.groups.some(g => g.dow === dow && g.h === h && g.trainer === c.trainer)) continue;
+            if (absentSeed(c.trainer, date, h) || usedTrainer.has(key) || data.groups.some(g => g.dow === dow && g.h === h && g.trainer === c.trainer)) continue;
             usedTrainer.add(key);
             add({ date, h, trainer: c.trainer, kind: c.plan, clients: ids });
           }
@@ -202,10 +217,14 @@ window.NF = (() => {
       ls.set(SKEY, JSON.stringify(s));
       return s;
     },
+    // Prototipo: cada persona del equipo entra con su email; Sergio (dueño) ve
+    // todo, Jules y Adrián solo su agenda y su calendario. En producción son
+    // cuentas de Supabase con su rol.
     loginAdmin(user, pass) {
-      // Prototipo: en producción cada administrador tiene su propia cuenta en Supabase
-      if (!(user.trim().toLowerCase() === 'admin@nordfit.es' && pass === 'nordfit')) return null;
-      const s = { role: 'admin', name: 'Administración', initials: 'NF' };
+      const email = user.trim().toLowerCase() === 'admin@nordfit.es' ? 'sergio@nordfit.es' : user.trim().toLowerCase();
+      const t = TRAINERS.find(x => x.email === email);
+      if (!t || pass !== 'nordfit') return null;
+      const s = { role: t.role, trainer: t.id, name: t.name, initials: initials(t.name) };
       ls.set('nf-admin', JSON.stringify(s));
       return s;
     },
@@ -219,6 +238,10 @@ window.NF = (() => {
   const trainer = id => TRAINERS.find(t => t.id === id);
   const closure = date => db().closures.find(x => x.date === date);
   const isOpen = date => !!STUDIO[parse(date).getDay()] && !closure(date);
+  // Ausencia de un entrenador: día entero o franja [from, to) en horas
+  const absences = () => db().absences;
+  const absencesOn = (date, tid) => absences().filter(b => b.date === date && (!tid || b.trainer === tid));
+  const isAbsent = (tid, date, h) => absencesOn(date, tid).some(b => b.allDay || (h >= b.from && h < b.to));
   const counts = b => b.status === 'ok' || b.status === 'late';
 
   function payment(clientId, month) {
@@ -257,7 +280,7 @@ window.NF = (() => {
     const dow = parse(date).getDay();
     const mine = h => db().bookings.some(b => b.date === date && b.h === h && b.clients.includes(clientId) && counts(b));
     if (c.plan === 'grupo') {
-      return db().groups.filter(g => g.dow === dow).map(g => {
+      return db().groups.filter(g => g.dow === dow && !isAbsent(g.trainer, date, g.h)).map(g => {
         const taken = groupTaken(date, g.h);
         return { date, h: g.h, trainer: g.trainer, kind: 'grupo', free: g.cap - taken, cap: g.cap, mine: mine(g.h), ok: bookable(date, g.h) && taken < g.cap && !mine(g.h) };
       });
@@ -268,7 +291,8 @@ window.NF = (() => {
     const out = [];
     for (let h = sh[0]; h <= sh[1]; h++) {
       const isMine = mine(h);
-      out.push({ date, h, trainer: tid, kind: c.plan, mine: isMine, ok: bookable(date, h) && !trainerBusy(tid, date, h) && !isMine });
+      const away = isAbsent(tid, date, h);
+      out.push({ date, h, trainer: tid, kind: c.plan, mine: isMine, away, ok: !away && bookable(date, h) && !trainerBusy(tid, date, h) && !isMine });
     }
     return out;
   }
@@ -317,7 +341,7 @@ window.NF = (() => {
     let p = payment(clientId, month);
     if (!p) { p = { id: uid('p'), client: clientId, month, amount: PLANS[c.plan].price, status: 'pending', method, paidAt: null }; db().payments.push(p); }
     p.method = method;
-    p.promised = method === 'cash' || method === 'transfer';
+    p.promised = ['cash', 'transfer', 'bizum'].includes(method);
     if (method === 'card' || method === 'sepa') { p.status = 'paid'; p.paidAt = today(); }
     save();
     return p;
@@ -408,6 +432,17 @@ window.NF = (() => {
     save();
     return b;
   }
+  function addAbsence(f) {
+    const b = { id: uid('a'), trainer: f.trainer, date: f.date, allDay: !!f.allDay, from: f.allDay ? null : f.from, to: f.allDay ? null : f.to, reason: f.reason || '' };
+    db().absences.push(b);
+    save();
+    return b;
+  }
+  function removeAbsence(id) { db().absences = db().absences.filter(b => b.id !== id); save(); }
+  // Reservas que se ven afectadas por una ausencia (para avisar y cancelarlas)
+  function affectedByAbsence(f) {
+    return db().bookings.filter(b => b.date === f.date && b.trainer === f.trainer && counts(b) && (f.allDay || (b.h >= f.from && b.h < f.to)));
+  }
   function saveGroup(g) {
     if (g.id) Object.assign(db().groups.find(x => x.id === g.id), g);
     else db().groups.push(Object.assign({ id: uid('g') }, g));
@@ -416,11 +451,11 @@ window.NF = (() => {
   function removeGroup(id) { db().groups = db().groups.filter(g => g.id !== id); save(); }
 
   return {
-    TRAINERS, PLANS, METHODS, STUDIO, SHIFTS, CANCEL_HOURS,
+    TRAINERS, PLANS, METHODS, BANK, STUDIO, SHIFTS, CANCEL_HOURS,
     db, reset, session,
     ymd, ym, parse, addDays, addMonths, at, today, thisMonth, monthName, monthLabel, dayLabel, hourLabel, cap, money, initials, DAYS, MONTHS,
-    client, trainer, closure, isOpen, payment, bookingsOf, usage, slots, groupTaken, trainerBusy, counts,
+    client, trainer, closure, isOpen, absences, absencesOn, isAbsent, payment, bookingsOf, usage, slots, groupTaken, trainerBusy, counts,
     book, cancel, cancelInfo, pay, updateProfile,
-    markPaid, markPending, setPayment, addPayment, ensureMonth, remind, lastReminder, saveClient, toggleClosure, affectedBy, adminCancel, adminBook, saveGroup, removeGroup
+    markPaid, markPending, setPayment, addPayment, ensureMonth, remind, lastReminder, saveClient, toggleClosure, affectedBy, adminCancel, adminBook, saveGroup, removeGroup, addAbsence, removeAbsence, affectedByAbsence
   };
 })();
