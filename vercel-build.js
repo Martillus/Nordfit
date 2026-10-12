@@ -13,4 +13,14 @@ const skip = new Set(['src', 'build.js', 'README.md'].map(f => path.join(src, f)
 fs.rmSync(out, { recursive: true, force: true });
 fs.cpSync(src, path.join(out, 'web'), { recursive: true, filter: p => !skip.has(p) });
 fs.copyFileSync(path.join(root, 'vercel', 'lanzador.html'), path.join(out, 'index.html'));
+
+// Cada despliegue lleva su propia versión en los CSS y JS (?v=...) para que el
+// navegador nunca use una copia antigua guardada
+const version = Date.now().toString(36);
+const web = path.join(out, 'web');
+for (const f of fs.readdirSync(web).filter(f => f.endsWith('.html'))) {
+  const file = path.join(web, f);
+  const html = fs.readFileSync(file, 'utf8').replace(/((?:src|href)="assets\/[^"?]+\.(?:js|css))"/g, `$1?v=${version}"`);
+  fs.writeFileSync(file, html);
+}
 console.log('✓ dist/ listo');
