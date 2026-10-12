@@ -1,4 +1,4 @@
-/* NORDFIT — Mi cuenta: reservar, mis sesiones, pagos y datos */
+/* NORDFIT — Mi cuenta: mi horario, mis sesiones, pagos y datos */
 (() => {
   const NF = window.NF;
   const { h, btn, chip, icon, modal, confirm, toast, status } = window.UI;
@@ -13,7 +13,7 @@
     month: cur,
     trainer: me().trainer,
     day: null,
-    cart: []
+    changing: null // id de la sesión que se quiere cambiar, o 'recover'
   };
   const $ = s => document.querySelector(s);
 
@@ -22,6 +22,7 @@
     const c = me();
     $('[data-first-name]').textContent = c.name.split(' ')[0];
     const u = NF.usage(c.id, cur);
+    const done = NF.bookingsOf(c.id).filter(b => b.date.startsWith(cur) && NF.counts(b) && NF.at(b.date, b.h).getTime() < Date.now()).length;
     const pay = u.paid ? status('paid', 'Pagado') : u.promised ? status('pending', 'Pendiente de confirmar') : status('pending', 'Pendiente');
     const partner = c.partner ? NF.client(c.partner) : null;
     const dl = $('[data-stats]');
@@ -29,8 +30,8 @@
       h('div', null, h('dt', null, 'Plan'), h('dd', null, plan().name, partner ? h('small', null, ' con ' + partner.name.split(' ')[0]) : null)),
       h('div', null, h('dt', null, c.plan === 'grupo' ? 'Grupos' : 'Entrenador'), h('dd', null, c.plan === 'grupo' ? 'Todo el equipo' : NF.trainer(c.trainer).name)),
       h('div', null, h('dt', null, `Bono de ${NF.monthName(cur)}`),
-        h('dd', null, h('span.num', null, `${u.used}/${u.total}`), h('small', null, ' sesiones'),
-          meter(u.used, u.total))),
+        h('dd', null, h('span.num', null, `${done}/${u.total}`), h('small', null, ' hechas'),
+          meter(done, u.total))),
       h('div', null, h('dt', null, 'Pago del mes'), h('dd', null, pay))
     );
   }
@@ -63,208 +64,204 @@
   });
   $('[data-logout]').addEventListener('click', () => { NF.session.logout(); window.location.href = 'index.html'; });
 
-  /* ---------------- Reservar ---------------- */
-  function monthLimit(m) {
-    const u = NF.usage(me().id, m);
-    return { u, max: u.left };
-  }
-  function cartIn(m) { return state.cart.filter(x => x.date.startsWith(m)).length; }
+  /* ---------------- Mi horario ----------------
+     Cada cliente tiene un horario fijo y sus sesiones del mes salen de él.
+     Desde aquí pide cambiar una sesión concreta (o recuperar una perdida):
+     la solicitud le llega a su entrenador, que la acepta o la rechaza. */
+  const DOWS = ['domingos', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábados'];
+  const when = (date, h) => `${NF.dayLabel(date)} a las ${NF.hourLabel(h)}`;
+  const shortWhen = (date, h) => { const d = NF.parse(date); return `${NF.DAYS[d.getDay()].slice(0, 3)} ${d.getDate()} ${NF.MONTHS[d.getMonth()].slice(0, 3)} · ${NF.hourLabel(h)}`; };
+  const bookingById = id => NF.db().bookings.find(b => b.id === id);
+  const future = b => NF.at(b.date, b.h).getTime() - Date.now() > 2 * 3600e3;
   function myBookingsOn(date) {
     return NF.bookingsOf(me().id).filter(b => b.date === date && NF.counts(b));
+  }
+  function renderMobileBar() { document.querySelector('.mbar')?.remove(); }
+
+  function startChange(bookingId) {
+    const b = bookingId ? bookingById(bookingId) : null;
+    state.changing = bookingId || 'recover';
+    state.month = b ? b.date.slice(0, 7) : state.month;
+    state.trainer = b ? b.trainer : me().trainer;
+    state.day = null;
+    openTab('reservar');
+    document.querySelector('[data-panel="reservar"]').scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }
+  function stopChange() { state.changing = null; state.day = null; renderReservar(); }
+
+  function requestStatus(r) {
+    if (r.status === 'pending') return status('pending', `Pendiente de ${NF.trainer(r.approver).name}`);
+    if (r.status === 'accepted') return status('paid', 'Aceptado');
+    return status('off', 'Rechazado');
+  }
+  function requestText(r) {
+    return r.from ? `${shortWhen(r.from.date, r.from.h)} → ${shortWhen(r.to.date, r.to.h)}` : `Recuperar: ${shortWhen(r.to.date, r.to.h)}`;
   }
 
   function renderReservar() {
     const panel = $('[data-panel="reservar"]');
     const c = me();
-    const { u } = monthLimit(state.month);
-    const inCart = cartIn(state.month);
+    const changing = state.changing;
+    const moving = changing && changing !== 'recover' ? bookingById(changing) : null;
+    if (changing && changing !== 'recover' && !moving) { state.changing = null; return renderReservar(); }
+    const u = NF.usage(c.id, state.month);
 
-    // Aviso del bono del mes que se está viendo
-    let notice;
-    if (u.paid || u.promised) {
-      notice = h('div.notice', null,
-        icon(u.paid ? 'check' : 'clock'),
-        h('p', null, h('strong', null, `Bono de ${NF.monthName(state.month)}: `),
-          u.left ? `te quedan ${u.left} de ${u.total} sesiones.` : 'ya has reservado todas tus sesiones.',
-          u.promised ? ' Pago pendiente de confirmar.' : ''));
+    // Parte de arriba: horario fijo y solicitudes, o aviso del cambio en curso
+    let top;
+    if (changing) {
+      top = h('div.notice.notice--warn', null, icon('clock'),
+        h('div', null,
+          h('p', null, h('strong', null, moving ? `Cambiar tu sesión del ${when(moving.date, moving.h)}. ` : `Recuperar una sesión de ${NF.monthName(state.month)}. `),
+            `Elige el nuevo día y hora. Se lo enviaremos a ${NF.trainer(moving ? moving.trainer : c.trainer).name} para que lo confirme.`),
+          h('button.link-btn', { type: 'button', onclick: stopChange }, 'Cancelar')));
     } else {
-      notice = h('div.notice.notice--warn', null, icon('alert'),
-        h('p', null, h('strong', null, `Bono de ${NF.monthName(state.month)} pendiente de pago. `),
-          `Elige tus ${u.total} sesiones y págalo al confirmar (${NF.money(u.price)}).`));
+      const reqs = NF.db().requests.filter(r => r.client === c.id && r.status !== 'withdrawn').sort((a, b) => b.created.localeCompare(a.created)).slice(0, 4);
+      const fixed = (c.schedule || []).slice().sort((a, b) => ((a.dow + 6) % 7) - ((b.dow + 6) % 7) || a.h - b.h);
+      top = h('div.fixed-row', null,
+        h('section.fixed', null,
+          h('h3', null, 'Tu horario fijo'),
+          fixed.length ? h('ul.fixed__list', null, fixed.map(x => h('li', null, h('strong', null, `${NF.cap(DOWS[x.dow])} · ${NF.hourLabel(x.h)}`), h('span', null, x.group ? `Grupo con ${NF.trainer(x.trainer).name}` : `Con ${NF.trainer(x.trainer).name}`))))
+            : h('p.muted', null, 'Tu entrenador aún no ha fijado tu horario.'),
+          h('p.fixed__note', null, '¿No puedes ir algún día? Toca esa sesión en el calendario y pide el cambio. Para cambiar tu horario fijo, habla con tu entrenador.')),
+        h('section.fixed', null,
+          h('h3', null, 'Tus solicitudes'),
+          reqs.length ? h('ul.req-list', null, reqs.map(r => h('li', null,
+            h('span', null, h('strong', null, requestText(r)), r.status === 'rejected' && r.note ? h('small', null, r.note) : null),
+            h('span.req-list__st', null, requestStatus(r),
+              r.status === 'pending' ? h('button.link-btn', { type: 'button', onclick: () => { NF.cancelRequest(r.id); toast('Solicitud anulada.'); renderAll(); } }, 'Anular') : null))))
+            : h('p.muted', null, 'No has pedido ningún cambio.'),
+          u.left > 0 && state.month >= cur ? h('div.notice', null, icon('alert'), h('div', null,
+            h('p', null, `Te ${u.left > 1 ? 'quedan' : 'queda'} ${u.left} ${u.left > 1 ? 'sesiones' : 'sesión'} por recuperar en ${NF.monthName(state.month)}.`),
+            h('button.link-btn', { type: 'button', onclick: () => startChange(null) }, 'Pedir recuperación'))) : null));
     }
 
-    // Barra de herramientas: mes y entrenador
+    // Calendario
     const monthNav = h('div.cal-nav', null,
       h('button.icon-btn', { type: 'button', 'aria-label': 'Mes anterior', disabled: state.month === cur, svg: window.UI.ICON.left, onclick: () => { state.month = cur; state.day = null; renderReservar(); } }),
       h('h2.cal-nav__title', { 'aria-live': 'polite' }, NF.monthLabel(state.month)),
-      h('button.icon-btn', { type: 'button', 'aria-label': 'Mes siguiente', disabled: state.month === next, svg: window.UI.ICON.right, onclick: () => { state.month = next; state.day = null; renderReservar(); } })
-    );
-    const filters = c.plan === 'grupo'
-      ? h('p.cal-filter__note', null, 'Grupos reducidos con plazas limitadas')
-      : h('div.cal-filter', { role: 'group', 'aria-label': 'Entrenador' },
-        h('span.cal-filter__label', null, 'Entrenador'),
-        NF.TRAINERS.map(t => chip(t.name + (t.id === c.trainer ? ' · el tuyo' : ''), { pressed: state.trainer === t.id, onclick: () => { state.trainer = t.id; renderReservar(); } })));
-
-    // Calendario mensual
+      h('button.icon-btn', { type: 'button', 'aria-label': 'Mes siguiente', disabled: state.month === next, svg: window.UI.ICON.right, onclick: () => { state.month = next; state.day = null; renderReservar(); } }));
+    const hint = h('p.cal-filter__note', null, changing
+      ? (c.plan === 'grupo' ? 'Grupos con plazas libres' : `Huecos libres de ${NF.trainer(state.trainer).name}`)
+      : 'Tus sesiones del mes');
     const first = NF.parse(state.month);
-    const offset = (first.getDay() + 6) % 7;
     const grid = h('div.cal-grid', { role: 'grid', 'aria-label': `Calendario de ${NF.monthLabel(state.month)}` });
     ['L', 'M', 'X', 'J', 'V', 'S', 'D'].forEach((d, i) => grid.append(h('div.cal-dow', { role: 'columnheader', 'aria-label': ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'][i] }, d)));
-    for (let i = 0; i < offset; i++) grid.append(h('div.cal-pad', { 'aria-hidden': 'true' }));
+    for (let i = 0; i < (first.getDay() + 6) % 7; i++) grid.append(h('div.cal-pad', { 'aria-hidden': 'true' }));
     const todayS = NF.today();
-    let firstFree = null;
+    let firstPick = null;
     for (let d = new Date(first); d.getMonth() === first.getMonth(); d = NF.addDays(d, 1)) {
       const date = NF.ymd(d);
       const past = date < todayS;
       const closed = NF.closure(date);
       const openDay = !!NF.STUDIO[d.getDay()];
-      const sl = past || closed || !openDay ? [] : NF.slots(c.id, date, state.trainer);
-      const free = sl.filter(s => s.ok).length;
-      const awayAll = sl.length > 0 && sl.every(s => s.away);
-      const mine = myBookingsOn(date).length;
-      const picked = state.cart.filter(x => x.date === date).length;
-      if (!firstFree && free) firstFree = date;
-      let info = '';
+      const mine = myBookingsOn(date);
+      let info = ''; let selectable = false; let full = false;
       if (closed) info = closed.reason;
       else if (!openDay) info = 'Cerrado';
-      else if (past) info = '';
-      else info = free ? `${free} libre${free > 1 ? 's' : ''}` : mine ? 'Tu sesión' : awayAll ? 'No disponible' : 'Completo';
+      else if (!past && changing) {
+        const sl = NF.slots(c.id, date, state.trainer);
+        const free = sl.filter(x => x.ok).length;
+        selectable = free > 0;
+        full = !free;
+        info = free ? `${free} libre${free > 1 ? 's' : ''}` : sl.length && sl.every(x => x.away) ? 'No disponible' : 'Completo';
+      } else if (mine.length) {
+        info = mine.map(b => NF.hourLabel(b.h)).join(' · ');
+        selectable = true;
+      }
+      if (selectable && !past && !firstPick) firstPick = date;
       const cls = ['cal-day'];
       if (past) cls.push('is-past');
       if (closed || !openDay) cls.push('is-closed');
-      if (!past && openDay && !closed && !free && !mine) cls.push('is-full');
+      if (full) cls.push('is-full');
       if (date === todayS) cls.push('is-today');
-      if (state.day === date) cls.push('is-selected');
-      const label = `${NF.dayLabel(date)}. ${info}${mine ? `. Tienes ${mine} sesión reservada` : ''}${picked ? `. ${picked} seleccionada` : ''}`;
       grid.append(h('button.' + cls.join('.'), {
-        type: 'button', role: 'gridcell', 'aria-label': label, 'data-date': date, 'aria-pressed': String(state.day === date),
-        disabled: past || !!closed || !openDay,
+        type: 'button', role: 'gridcell', 'data-date': date,
+        'aria-label': `${NF.dayLabel(date)}. ${info}${mine.length ? '. Tienes sesión' : ''}`,
+        disabled: !!closed || !openDay || (changing && (past || !selectable)),
         onclick: () => { state.day = date; renderReservar(); document.querySelector('.slots')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
       },
       h('span.cal-day__n', null, d.getDate()),
       h('span.cal-day__info', null, info),
-      h('span.cal-day__marks', { 'aria-hidden': 'true' },
-        mine ? h('span.mark-mine', { title: 'Reservada' }) : null,
-        picked ? h('span.mark-pick', null, picked) : null)));
+      h('span.cal-day__marks', { 'aria-hidden': 'true' }, mine.length ? h('span.mark-mine') : null,
+        moving && moving.date === date ? h('span.mark-pick', null, '↺') : null)));
     }
-    if (!state.day && firstFree) state.day = firstFree;
-    if (state.day && !state.day.startsWith(state.month)) state.day = firstFree;
+    if (!state.day || !state.day.startsWith(state.month)) state.day = firstPick;
     const sel = state.day && grid.querySelector(`[data-date="${state.day}"]`);
     if (sel) { sel.classList.add('is-selected'); sel.setAttribute('aria-pressed', 'true'); }
-
     const legend = h('ul.cal-legend', null,
       h('li', null, h('span.mark-mine'), 'Tus sesiones'),
-      h('li', null, h('span.mark-pick', null, '1'), 'Seleccionadas'),
+      changing && moving ? h('li', null, h('span.mark-pick', null, '↺'), 'Sesión que cambias') : null,
       h('li', null, h('span.lg-closed'), 'Cerrado'));
-
-    const cal = h('div.cal-card', null, h('div.cal-top', null, monthNav, filters), grid, legend);
+    const cal = h('div.cal-card', null, h('div.cal-top', null, monthNav, hint), grid, legend);
 
     panel.replaceChildren(
-      h('div.panel__head', null, h('h2.display.h-sm', null, 'Elige tus ', h('span.thin', null, 'sesiones')), notice),
-      h('div.book', null, cal, h('div.book__side', null, renderSlots(), renderCart()))
-    );
-    renderMobileBar();
+      h('div.panel__head', null, h('h2.display.h-sm', null, changing ? 'Elige el ' : 'Mi ', h('span.thin', null, changing ? 'nuevo hueco' : 'horario')), top),
+      h('div.book', null, cal, h('div.book__side', null, changing ? renderSlots() : renderDay())));
   }
 
+  // Detalle del día elegido: sus sesiones y el botón para pedir cambio
+  function renderDay() {
+    const box = h('div.slots');
+    if (!state.day) { box.append(h('p.muted', null, 'No tienes sesiones este mes.')); return box; }
+    box.append(h('h3.slots__title', null, NF.cap(NF.dayLabel(state.day))));
+    const list = myBookingsOn(state.day);
+    if (!list.length) { box.append(h('p.muted', null, 'No tienes sesión este día.')); return box; }
+    box.append(h('ul.day-sess', null, list.map(b => {
+      const r = NF.requestFor(b.id);
+      return h('li', null,
+        h('div', null, h('strong', null, `${NF.hourLabel(b.h)} – ${NF.hourLabel(b.h + 1)}`), h('span.muted', null, `${NF.PLANS[b.kind].name} con ${NF.trainer(b.trainer).name}`),
+          r ? h('small.day-sess__req', null, icon('clock'), `Cambio pedido al ${shortWhen(r.to.date, r.to.h)} · pendiente`) : null),
+        r ? h('button.link-btn', { type: 'button', onclick: () => { NF.cancelRequest(r.id); toast('Solicitud anulada.'); renderAll(); } }, 'Anular solicitud')
+          : future(b) ? btn('Pedir cambio', { cls: 'btn--dark btn--sm', noIcon: true, onclick: () => startChange(b.id) }) : h('span.muted.small', null, NF.at(b.date, b.h).getTime() < Date.now() ? 'Hecha' : 'Es en menos de 2 h'));
+    })));
+    return box;
+  }
+
+  // Huecos libres del día elegido mientras se pide un cambio
   function renderSlots() {
     const box = h('div.slots');
-    if (!state.day) { box.append(h('p.muted', null, 'No quedan huecos libres este mes con este filtro.')); return box; }
+    if (!state.day) { box.append(h('p.muted', null, 'No quedan huecos libres este mes.')); return box; }
     const c = me();
     const list = NF.slots(c.id, state.day, state.trainer);
-    const mineOther = myBookingsOn(state.day).filter(b => !list.some(s => s.h === b.h && s.mine));
     box.append(h('h3.slots__title', null, NF.cap(NF.dayLabel(state.day))));
-    if (!list.length && !mineOther.length) {
-      box.append(h('p.muted', null, c.plan === 'grupo' ? 'Este día no hay grupos.' : `${NF.trainer(state.trainer).name} no trabaja este día. Prueba con otro entrenador o día.`));
-      return box;
-    }
-    const ul = h('ul.slot-list');
-    list.forEach(s => {
-      const picked = state.cart.some(x => x.date === s.date && x.h === s.h);
+    if (!list.length) { box.append(h('p.muted', null, c.plan === 'grupo' ? 'Este día no hay grupos.' : `${NF.trainer(state.trainer).name} no trabaja este día.`)); return box; }
+    box.append(h('ul.slot-list', null, list.map(s => {
       let sub;
-      if (s.mine) sub = 'Reservada';
+      if (s.mine) sub = 'Tu sesión';
       else if (s.kind === 'grupo') sub = s.free > 0 ? `${NF.trainer(s.trainer).name} · ${s.free} de ${s.cap} plazas` : 'Grupo completo';
       else sub = s.ok ? NF.trainer(s.trainer).name : s.away ? 'No disponible' : 'Ocupado';
-      const cls = 'slot' + (s.mine ? '.is-mine' : '') + (picked ? '.is-picked' : '') + (!s.ok && !s.mine ? '.is-off' : '');
-      ul.append(h('li', null, h('button.' + cls, {
-        type: 'button', disabled: !s.ok && !picked, 'aria-pressed': String(picked),
-        'aria-label': `${NF.hourLabel(s.h)}, ${sub}${picked ? ', seleccionada' : ''}`,
-        onclick: () => togglePick(s)
-      }, h('span.slot__h', null, NF.hourLabel(s.h)), h('span.slot__sub', null, sub), picked ? icon('check', 'slot__ic') : null)));
-    });
-    mineOther.forEach(b => ul.append(h('li', null, h('div.slot.is-mine', null, h('span.slot__h', null, NF.hourLabel(b.h)), h('span.slot__sub', null, 'Reservada con ' + NF.trainer(b.trainer).name)))));
-    box.append(ul);
+      return h('li', null, h('button.slot' + (s.mine ? '.is-mine' : '') + (!s.ok && !s.mine ? '.is-off' : ''), {
+        type: 'button', disabled: !s.ok, 'aria-label': `${NF.hourLabel(s.h)}, ${sub}`, onclick: () => requestModal(s)
+      }, h('span.slot__h', null, NF.hourLabel(s.h)), h('span.slot__sub', null, sub)));
+    })));
     return box;
   }
 
-  function togglePick(s) {
-    const i = state.cart.findIndex(x => x.date === s.date && x.h === s.h);
-    if (i > -1) { state.cart.splice(i, 1); renderReservar(); return; }
-    const m = s.date.slice(0, 7);
-    const { u, max } = monthLimit(m);
-    if (cartIn(m) >= max) {
-      toast(max === 0 ? `Ya has reservado tus ${u.total} sesiones de ${NF.monthName(m)}.` : `Tu bono de ${NF.monthName(m)} tiene ${max} sesiones disponibles.`, 'warn');
-      return;
-    }
-    state.cart.push({ date: s.date, h: s.h, trainer: s.trainer });
-    state.cart.sort((a, b) => (a.date + a.h).localeCompare(b.date + b.h));
-    renderReservar();
-  }
-
-  function needsPayment() {
-    return [...new Set(state.cart.map(x => x.date.slice(0, 7)))].filter(m => !NF.usage(me().id, m).canBook);
-  }
-
-  function renderCart() {
-    const box = h('div.cart', { 'aria-live': 'polite' });
-    box.append(h('h3.cart__title', null, 'Tu selección', h('span.cart__n', null, String(state.cart.length))));
-    if (!state.cart.length) {
-      box.append(h('p.muted', null, 'Toca un día y elige la hora. Puedes seleccionar varias sesiones del mes y confirmarlas juntas.'));
-      return box;
-    }
-    box.append(h('ul.cart__list', null, state.cart.map(x => h('li', null,
-      h('span', null, h('strong', null, NF.cap(NF.dayLabel(x.date))), h('small', null, `${NF.hourLabel(x.h)} · ${NF.trainer(x.trainer).name}`)),
-      h('button.icon-btn.icon-btn--sm', { type: 'button', 'aria-label': `Quitar ${NF.dayLabel(x.date)} a las ${NF.hourLabel(x.h)}`, svg: window.UI.ICON.close, onclick: () => { state.cart = state.cart.filter(y => y !== x); renderReservar(); } })))));
-    const unpaid = needsPayment();
-    const total = unpaid.reduce((s, m) => s + NF.usage(me().id, m).price, 0);
-    if (unpaid.length) box.append(h('p.cart__pay', null, `Incluye el pago del bono de ${unpaid.map(NF.monthName).join(' y ')}: `, h('strong', null, NF.money(total))));
-    box.append(btn(unpaid.length ? `Pagar y reservar` : `Confirmar ${state.cart.length} ${state.cart.length > 1 ? 'reservas' : 'reserva'}`, { cls: 'btn--dark', onclick: checkout }));
-    box.append(h('p.cart__rule', null, icon('clock'), `Puedes cancelar gratis hasta ${NF.CANCEL_HOURS} h antes.`));
-    return box;
-  }
-
-  // Barra fija en móvil con el resumen de la selección
-  function renderMobileBar() {
-    let bar = document.querySelector('.mbar');
-    if (!state.cart.length || document.querySelector('[data-panel="reservar"]').hidden) { bar?.remove(); return; }
-    if (!bar) { bar = h('div.mbar'); document.body.append(bar); }
-    const unpaid = needsPayment();
-    bar.replaceChildren(
-      h('span', null, h('strong', null, `${state.cart.length} ${state.cart.length > 1 ? 'sesiones' : 'sesión'}`), h('small', null, unpaid.length ? 'con pago del bono' : 'listas para confirmar')),
-      btn(unpaid.length ? 'Pagar y reservar' : 'Confirmar', { cls: 'btn--sm', onclick: checkout }));
-  }
-
-  async function checkout() {
-    const unpaid = needsPayment();
-    for (const m of unpaid) {
-      const method = await payModal(m);
-      if (!method) return;
-    }
-    const res = NF.book(me().id, state.cart);
-    if (res.error) { toast(res.error, 'warn'); state.cart = []; renderAll(); return; }
-    const n = res.made.length;
-    state.cart = [];
-    renderAll();
+  function requestModal(s) {
+    const c = me();
+    const moving = state.changing !== 'recover' ? bookingById(state.changing) : null;
+    if (!moving && NF.usage(c.id, s.date.slice(0, 7)).left <= 0) { toast(`No te quedan sesiones por recuperar en ${NF.monthName(s.date.slice(0, 7))}.`, 'warn'); return; }
+    const who = NF.trainer(moving ? moving.trainer : s.trainer).name;
+    const note = h('textarea', { id: 'rq-note', rows: '2', maxlength: '140', placeholder: 'Opcional: el motivo, por si ayuda' });
     const m = modal({
-      title: n > 1 ? `${n} sesiones reservadas` : 'Sesión reservada',
-      body: h('div.done', null,
-        h('p', null, 'Te hemos enviado la confirmación por email. Te recordaremos cada sesión el día antes.'),
-        h('ul.done__list', null, res.made.map(b => h('li', null, icon('check'), `${NF.cap(NF.dayLabel(b.date))} · ${NF.hourLabel(b.h)} · ${NF.trainer(b.trainer).name}`)))),
-      actions: [btn('Ver mis sesiones', { cls: 'btn--dark', onclick: () => { m.close(); openTab('sesiones'); } })]
+      title: moving ? 'Pedir cambio de sesión' : 'Pedir recuperación',
+      body: h('div.stack', null,
+        h('dl.change', null,
+          moving ? h('div', null, h('dt', null, 'Sesión actual'), h('dd', null, NF.cap(when(moving.date, moving.h)))) : null,
+          h('div', null, h('dt', null, moving ? 'Nueva' : 'Sesión'), h('dd', null, NF.cap(when(s.date, s.h)), ` · ${NF.trainer(s.trainer).name}`))),
+        h('div.adm-form', null, h('label', { for: 'rq-note' }, `Mensaje para ${who}`), note),
+        h('p.muted.small', null, `${who} recibirá la solicitud en su panel. Hasta que la acepte, tu sesión sigue como estaba.`)),
+      actions: [h('button.link-btn', { type: 'button', onclick: () => m.close() }, 'Volver'), btn('Enviar solicitud', { cls: 'btn--dark', noIcon: true, onclick: () => {
+        const res = NF.requestChange(c.id, moving ? moving.id : null, { date: s.date, h: s.h, trainer: s.trainer }, note.value.trim());
+        m.close();
+        if (res.error) { toast(res.error, 'warn'); renderReservar(); return; }
+        toast(`Solicitud enviada a ${who}.`, 'ok');
+        state.changing = null; state.day = s.date;
+        renderAll();
+      } })]
     });
   }
 
-  /* Pasarela de pago simulada. En producción: Stripe Checkout (tarjeta,
-     Apple Pay, Google Pay y domiciliación SEPA) y el webhook confirma el pago. */
   /* Pago del bono. Dos caminos:
      - Tarjeta de crédito o débito → en producción abre Stripe Checkout y el
        pago queda confirmado al momento.
@@ -352,7 +349,14 @@
           h('strong', null, `${NF.hourLabel(b.h)} – ${NF.hourLabel(b.h + 1)}`),
           h('span.muted', null, `${NF.PLANS[b.kind].name} con ${NF.trainer(b.trainer).name}${partner}`),
           info.late ? h('small.sess__warn', null, icon('alert'), 'Faltan menos de 24 h: si cancelas, la sesión se descuenta') : null),
-        h('button.link-btn', { type: 'button', onclick: () => cancelFlow(b) }, 'Cancelar'));
+        (() => {
+          const r = NF.requestFor(b.id);
+          return h('div.sess__act', null,
+            r ? h('small.day-sess__req', null, icon('clock'), `Cambio pedido al ${shortWhen(r.to.date, r.to.h)}`) : null,
+            r ? h('button.link-btn', { type: 'button', onclick: () => { NF.cancelRequest(r.id); toast('Solicitud anulada.'); renderAll(); } }, 'Anular solicitud')
+              : future(b) ? h('button.link-btn', { type: 'button', onclick: () => startChange(b.id) }, 'Pedir cambio') : null,
+            r ? null : h('button.link-btn.link-btn--quiet', { type: 'button', onclick: () => cancelFlow(b) }, 'No podré ir'));
+        })());
     };
     const pastRow = b => {
       const done = NF.at(b.date, b.h).getTime() <= now;
@@ -361,7 +365,7 @@
     };
     panel.replaceChildren(
       h('div.panel__head', null, h('h2.display.h-sm', null, 'Próximas ', h('span.thin', null, 'sesiones'))),
-      upcoming.length ? h('ul.sess-list', null, upcoming.map(card)) : h('div.empty', null, h('p', null, 'No tienes sesiones próximas.'), btn('Reservar', { cls: 'btn--dark', onclick: () => openTab('reservar') })),
+      upcoming.length ? h('ul.sess-list', null, upcoming.map(card)) : h('div.empty', null, h('p', null, 'No tienes sesiones próximas.'), btn('Ver mi horario', { cls: 'btn--dark', onclick: () => openTab('reservar') })),
       h('h3.sub', null, 'Historial'),
       past.length ? h('div.table-wrap', null, h('table.tbl', null,
         h('thead', null, h('tr', null, ['Día', 'Hora', 'Entrenador', 'Estado'].map(t => h('th', { scope: 'col' }, t)))),
@@ -375,7 +379,7 @@
       info.late ? 'Cancelar con menos de 24 h' : 'Cancelar sesión',
       info.late
         ? `La sesión del ${when} empieza en menos de 24 horas. Si la cancelas, se descuenta de tu bono igualmente.`
-        : `Vas a cancelar la sesión del ${when}. La sesión vuelve a tu bono y puedes reservar otro hueco.`,
+        : `Vas a cancelar la sesión del ${when}. La sesión vuelve a tu bono y puedes pedir recuperarla otro día.`,
       info.late ? 'Cancelar y perder la sesión' : 'Cancelar sesión', { danger: info.late, cancelText: 'Mantener' });
     if (!ok) return;
     NF.cancel(b.id);

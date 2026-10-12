@@ -67,8 +67,11 @@ window.NF = (() => {
   function db() {
     if (mem) return mem;
     const raw = ls.get(KEY);
-    if (raw) { try { mem = JSON.parse(raw); if (mem.v === 2) return mem; } catch (e) { /* datos corruptos */ } }
-    mem = seed();
+    if (raw) { try { mem = JSON.parse(raw); if (mem.v !== 3) mem = null; } catch (e) { mem = null; } }
+    const fresh = !mem;
+    if (fresh) mem = seed();
+    ensureMonths();
+    if (fresh) seedRequests();
     save();
     return mem;
   }
@@ -138,7 +141,7 @@ window.NF = (() => {
       { id: uid('a'), trainer: 'sergio', date: firstWeekday(addDays(now, 5), 5), allDay: true, from: null, to: null, reason: 'Formación' },
       { id: uid('a'), trainer: 'jules', date: firstWeekday(addDays(now, 2), 3), allDay: false, from: 16, to: 18, reason: 'Médico' }
     ];
-    const data = { v: 2, clients, groups, closures, absences, bookings: [], payments: [], reminders: [] };
+    const data = { v: 3, clients, groups, closures, absences, bookings: [], payments: [], reminders: [] };
 
     // Pagos: últimos 6 meses
     for (let k = -5; k <= 0; k++) {
@@ -154,56 +157,94 @@ window.NF = (() => {
       });
     }
 
-    // Reservas: mes anterior y mes actual
-    const busy = new Set(data.closures.map(x => x.date));
-    const absentSeed = (tid, date, h) => absences.some(b => b.trainer === tid && b.date === date && (b.allDay || (h >= b.from && h < b.to)));
-    const usedTrainer = new Set();
-    const groupCount = {};
-    const add = (b) => data.bookings.push(Object.assign({ id: uid('b'), status: 'ok', created: b.date }, b));
-    for (let k = -1; k <= 0; k++) {
-      const m = addMonths(cur, k);
-      const start = parse(m);
-      const days = [];
-      for (let d = new Date(start); d.getMonth() === start.getMonth(); d = addDays(d, 1)) if (STUDIO[d.getDay()] && !busy.has(ymd(d))) days.push(ymd(d));
-      const done = new Set();
-      clients.forEach((c, i) => {
-        if (!c.active || done.has(c.id)) return;
-        const paid = data.payments.some(p => p.client === c.id && p.month === m && p.status === 'paid');
-        if (!paid) return;
-        const ids = c.partner ? [c.id, c.partner] : [c.id];
-        ids.forEach(x => done.add(x));
-        // El mes actual no está completo: unas 5 sesiones reservadas
-        const want = k === 0 ? (i === 0 ? 5 : 3 + Math.floor(rnd() * 4)) : 8;
-        let got = 0; let tries = 0;
-        while (got < want && tries < 400) {
-          tries++;
-          const date = pick(days);
-          const dow = parse(date).getDay();
-          if (c.plan === 'grupo') {
-            const g = data.groups.find(gr => gr.dow === dow);
-            if (!g || absentSeed(g.trainer, date, g.h)) continue;
-            const key = date + g.h;
-            if ((groupCount[key] || 0) >= g.cap) continue;
-            if (data.bookings.some(b => b.date === date && b.h === g.h && b.clients.includes(c.id))) continue;
-            groupCount[key] = (groupCount[key] || 0) + 1;
-            add({ date, h: g.h, trainer: g.trainer, kind: 'grupo', clients: ids });
-          } else {
-            const sh = SHIFTS[c.trainer][dow];
-            if (!sh) continue;
-            const h = sh[0] + Math.floor(rnd() * (sh[1] - sh[0] + 1));
-            const key = c.trainer + date + h;
-            if (absentSeed(c.trainer, date, h) || usedTrainer.has(key) || data.groups.some(g => g.dow === dow && g.h === h && g.trainer === c.trainer)) continue;
-            usedTrainer.add(key);
-            add({ date, h, trainer: c.trainer, kind: c.plan, clients: ids });
-          }
-          got++;
+    // Horario fijo de cada cliente: 2 sesiones por semana (las parejas comparten)
+    const taken = new Set(groups.map(g => `${g.trainer}|${g.dow}|${g.h}`));
+    const load = {};
+    clients.forEach(c => {
+      const partner = c.partner && clients.find(x => x.id === c.partner);
+      if (partner && partner.schedule) { c.schedule = partner.schedule.map(x => Object.assign({}, x)); return; }
+      c.schedule = [];
+      if (c.plan === 'grupo') {
+        const order = groups.slice().sort(() => rnd() - .5);
+        for (const g of order) {
+          if (c.schedule.length === 2) break;
+          if ((load[g.id] || 0) >= g.cap || c.schedule.some(x => x.dow === g.dow)) continue;
+          load[g.id] = (load[g.id] || 0) + 1;
+          c.schedule.push({ dow: g.dow, h: g.h, trainer: g.trainer, group: g.id });
         }
-      });
-    }
-    // Algunas cancelaciones de ejemplo
-    data.bookings.filter((_, i) => i % 23 === 0).forEach(b => { b.status = 'cancelled'; });
-    data.bookings.filter((_, i) => i % 41 === 7).forEach(b => { b.status = 'late'; });
+        return;
+      }
+      const days = [1, 2, 3, 4, 5].filter(d => SHIFTS[c.trainer][d]);
+      let tries = 0;
+      while (c.schedule.length < 2 && tries++ < 200) {
+        const dow = pick(days);
+        const [from, to] = SHIFTS[c.trainer][dow];
+        const h = from + Math.floor(rnd() * (to - from + 1));
+        const key = `${c.trainer}|${dow}|${h}`;
+        if (taken.has(key) || c.schedule.some(x => x.dow === dow) || Math.abs(dow - (c.schedule[0] || { dow: 9 }).dow) < 2) continue;
+        taken.add(key);
+        c.schedule.push({ dow, h, trainer: c.trainer });
+      }
+      c.schedule.sort((x, y) => x.dow - y.dow);
+    });
+    data.requests = [];
+    data.gen = {};
+    // Sesiones del mes anterior (ya pasadas), del actual y del siguiente
+    [-1, 0, 1].forEach(k => { const m = addMonths(cur, k); clients.forEach(c => genFor(data, c, m)); data.gen[m] = true; });
+    // Algunas faltas del mes pasado
+    data.bookings.filter(b => b.date < ymd(now)).filter((_, i) => i % 17 === 3).forEach(b => { b.status = 'cancelled'; });
+    data.bookings.filter(b => b.date < ymd(now)).filter((_, i) => i % 29 === 5).forEach(b => { b.status = 'late'; });
     return data;
+  }
+
+  /* ---------------- Horario fijo → sesiones del mes ----------------
+     Cada cliente tiene un horario semanal. Sus sesiones del mes (hasta las 8
+     del bono) se crean solas a partir de él. Si ese día el estudio está
+     cerrado o el entrenador no está, esa sesión no se crea y el cliente puede
+     pedir recuperarla. */
+  function genFor(d, c, month, fromDate) {
+    if (!c.active || !c.schedule || !c.schedule.length) return 0;
+    if (c.partner && [c.id, c.partner].sort()[0] !== c.id) return 0;
+    const ids = c.partner ? [c.id, c.partner] : [c.id];
+    const live = b => b.status === 'ok' || b.status === 'late';
+    let n = d.bookings.filter(b => b.clients.includes(c.id) && b.date.startsWith(month) && live(b)).length;
+    const cap = PLANS[c.plan].sessions;
+    const start = parse(month);
+    let made = 0;
+    for (let day = new Date(start); day.getMonth() === start.getMonth() && n < cap; day = addDays(day, 1)) {
+      const date = ymd(day);
+      if (date < c.since || (fromDate && date < fromDate)) continue;
+      if (d.closures.some(x => x.date === date)) continue;
+      for (const sl of c.schedule.filter(x => x.dow === day.getDay()).sort((x, y) => x.h - y.h)) {
+        if (n >= cap) break;
+        const origin = `${date}|${sl.h}`;
+        if (d.bookings.some(b => b.origin === origin && b.clients.includes(c.id))) continue;
+        if ((d.absences || []).some(a => a.trainer === sl.trainer && a.date === date && (a.allDay || (sl.h >= a.from && sl.h < a.to)))) continue;
+        d.bookings.push({ id: uid('b'), date, h: sl.h, trainer: sl.trainer, kind: c.plan, clients: ids, status: 'ok', sched: true, origin, created: date });
+        n++; made++;
+      }
+    }
+    return made;
+  }
+  // Cada vez que se abre: se crean las sesiones del mes actual y del siguiente si aún no existen
+  function ensureMonths() {
+    [thisMonth(), addMonths(thisMonth(), 1)].forEach(m => {
+      if (mem.gen[m]) return;
+      mem.clients.forEach(c => genFor(mem, c, m));
+      mem.gen[m] = true;
+    });
+  }
+  // Cambia el horario fijo de un cliente: rehace sus sesiones futuras
+  function setSchedule(clientId, schedule) {
+    const c = client(clientId);
+    const ids = c.partner ? [c.id, c.partner] : [c.id];
+    ids.forEach(id => { client(id).schedule = schedule.map(x => Object.assign({}, x)); });
+    const tomorrow = ymd(addDays(new Date(), 1));
+    db().bookings = db().bookings.filter(b => !(b.clients.includes(c.id) && b.sched && !b.moved && b.status === 'ok' && b.date >= tomorrow));
+    db().requests.filter(r => r.client === c.id && r.status === 'pending' && r.booking).forEach(r => { r.status = 'rejected'; r.note = 'Horario cambiado'; });
+    const first = ids.slice().sort()[0];
+    [thisMonth(), addMonths(thisMonth(), 1)].forEach(m => genFor(db(), client(first), m, tomorrow));
+    save();
   }
 
   /* ---------------- Sesión ---------------- */
@@ -261,13 +302,16 @@ window.NF = (() => {
     const promised = !!p && p.status === 'pending' && !!p.promised;
     return { paid, promised, canBook: paid || promised, payment: p, total, used, left: Math.max(0, total - used), price: PLANS[c.plan].price };
   }
-  function trainerBusy(tid, date, h) {
+  const pendingTo = (date, h, exceptId) => db().requests.filter(r => r.status === 'pending' && r.id !== exceptId && r.to.date === date && r.to.h === h);
+  function trainerBusy(tid, date, h, exceptReq) {
     const dow = parse(date).getDay();
     if (db().groups.some(g => g.dow === dow && g.h === h && g.trainer === tid)) return true;
+    if (pendingTo(date, h, exceptReq).some(r => r.to.trainer === tid && r.kind !== 'grupo')) return true;
     return db().bookings.some(b => b.trainer === tid && b.date === date && b.h === h && b.kind !== 'grupo' && counts(b));
   }
-  function groupTaken(date, h) {
-    return db().bookings.filter(b => b.kind === 'grupo' && b.date === date && b.h === h && counts(b)).length;
+  function groupTaken(date, h, exceptReq) {
+    return db().bookings.filter(b => b.kind === 'grupo' && b.date === date && b.h === h && counts(b)).length
+      + pendingTo(date, h, exceptReq).filter(r => r.kind === 'grupo').length;
   }
   const bookable = (date, h) => at(date, h).getTime() - Date.now() >= MIN_LEAD_HOURS * 3600e3;
 
@@ -295,6 +339,74 @@ window.NF = (() => {
       out.push({ date, h, trainer: tid, kind: c.plan, mine: isMine, away, ok: !away && bookable(date, h) && !trainerBusy(tid, date, h) && !isMine });
     }
     return out;
+  }
+
+  /* ---------------- Solicitudes de cambio ----------------
+     El cliente pide mover una sesión (o recuperar una perdida) a otro hueco
+     libre. La solicitud le llega a su entrenador, que la acepta o rechaza. */
+  const requestFor = bookingId => db().requests.find(r => r.booking === bookingId && r.status === 'pending') || null;
+  function requestChange(clientId, bookingId, to, note) {
+    const c = client(clientId);
+    const b = bookingId ? db().bookings.find(x => x.id === bookingId) : null;
+    const s = slots(clientId, to.date, to.trainer).find(x => x.h === to.h);
+    if (!s || !s.ok) return { error: 'Ese hueco ya no está libre. Elige otro.' };
+    if (b && requestFor(b.id)) return { error: 'Ya tienes un cambio pendiente para esa sesión.' };
+    const r = {
+      id: uid('r'), client: clientId, booking: b ? b.id : null, kind: c.plan,
+      from: b ? { date: b.date, h: b.h, trainer: b.trainer } : null,
+      to: { date: to.date, h: to.h, trainer: s.trainer },
+      approver: b ? b.trainer : s.trainer,
+      status: 'pending', note: note || '', created: new Date().toISOString()
+    };
+    db().requests.push(r);
+    save();
+    return { ok: true, request: r };
+  }
+  function cancelRequest(reqId) {
+    const r = db().requests.find(x => x.id === reqId);
+    if (r && r.status === 'pending') { r.status = 'withdrawn'; save(); }
+  }
+  // Solicitudes que ve cada entrenador (Sergio, como dueño, puede ver todas)
+  function requestsFor(trainerId) {
+    return db().requests.filter(r => r.status === 'pending' && (!trainerId || r.approver === trainerId))
+      .sort((a, b) => (a.to.date + a.to.h).localeCompare(b.to.date + b.to.h));
+  }
+  function decideRequest(reqId, accept, by) {
+    const r = db().requests.find(x => x.id === reqId);
+    if (!r || r.status !== 'pending') return { error: 'Esta solicitud ya no está pendiente.' };
+    if (accept) {
+      const away = isAbsent(r.to.trainer, r.to.date, r.to.h) || closure(r.to.date);
+      const busy = r.kind === 'grupo'
+        ? groupTaken(r.to.date, r.to.h, r.id) >= ((db().groups.find(g => g.dow === parse(r.to.date).getDay() && g.h === r.to.h) || { cap: 0 }).cap)
+        : trainerBusy(r.to.trainer, r.to.date, r.to.h, r.id);
+      if (away || busy) return { error: 'El nuevo hueco ya no está libre. Rechaza la solicitud o habla con el cliente.' };
+      if (r.booking) {
+        const b = db().bookings.find(x => x.id === r.booking);
+        Object.assign(b, { date: r.to.date, h: r.to.h, trainer: r.to.trainer, moved: true, status: 'ok' });
+      } else {
+        const c = client(r.client);
+        db().bookings.push({ id: uid('b'), date: r.to.date, h: r.to.h, trainer: r.to.trainer, kind: c.plan, clients: c.partner ? [c.id, c.partner] : [c.id], status: 'ok', created: today(), recovered: true });
+      }
+    }
+    r.status = accept ? 'accepted' : 'rejected';
+    r.decidedBy = by || null;
+    r.decidedAt = new Date().toISOString();
+    save();
+    return { ok: true };
+  }
+  // Solicitudes de ejemplo para que el panel no esté vacío
+  function seedRequests() {
+    const future = c => db().bookings.filter(b => b.clients.includes(c.id) && b.status === 'ok' && b.date > ymd(addDays(new Date(), 2))).sort((a, b) => a.date.localeCompare(b.date));
+    ['Elías Romero', 'Carmen Ortiz', 'Isaac Arroyo', 'Daniel Rubio'].forEach((name, i) => {
+      const c = db().clients.find(x => x.name === name);
+      const b = future(c)[i % 2];
+      if (!b) return;
+      for (let k = 1; k < 10; k++) {
+        const date = ymd(addDays(parse(b.date), k));
+        const free = slots(c.id, date, b.trainer).find(x => x.ok);
+        if (free) { requestChange(c.id, b.id, { date, h: free.h, trainer: free.trainer }, i === 1 ? 'Ese día tengo médico' : ''); break; }
+      }
+    });
   }
 
   /* ---------------- Acciones del cliente ---------------- */
@@ -456,6 +568,7 @@ window.NF = (() => {
     ymd, ym, parse, addDays, addMonths, at, today, thisMonth, monthName, monthLabel, dayLabel, hourLabel, cap, money, initials, DAYS, MONTHS,
     client, trainer, closure, isOpen, absences, absencesOn, isAbsent, payment, bookingsOf, usage, slots, groupTaken, trainerBusy, counts,
     book, cancel, cancelInfo, pay, updateProfile,
+    setSchedule, requestFor, requestChange, cancelRequest, requestsFor, decideRequest,
     markPaid, markPending, setPayment, addPayment, ensureMonth, remind, lastReminder, saveClient, toggleClosure, affectedBy, adminCancel, adminBook, saveGroup, removeGroup, addAbsence, removeAbsence, affectedByAbsence
   };
 })();

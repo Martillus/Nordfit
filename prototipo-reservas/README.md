@@ -10,7 +10,7 @@ Es un prototipo navegable: todo funciona, pero los datos son de ejemplo y se gua
 |---|---|---|
 | `index.html` (y resto) | Web pública con el botón **Reserva tus clases** arriba a la derecha. Con sesión iniciada pasa a ser **Mi cuenta** | — |
 | `acceso.html` | Entrada con enlace por email (sin contraseña) | `lucia@ejemplo.com` (1:1 con Sergio) · `raul.medina@ejemplo.com` (grupo) |
-| `cuenta.html` | Mi cuenta: **Reservar** (calendario + pago), **Mis sesiones**, **Pagos**, **Mis datos** | Tras entrar |
+| `cuenta.html` | Mi cuenta: **Mi horario** (horario fijo, calendario y solicitudes de cambio), **Mis sesiones**, **Pagos**, **Mis datos** | Tras entrar |
 | `admin.html` (`/admin` en Vercel) | Panel del equipo. **Sergio (dueño)**: resumen, agenda, clientes, pagos, calendario y estadísticas. **Jules y Adrián**: su día, su agenda y su calendario para bloquear días u horas | `sergio@nordfit.es`, `jules@nordfit.es`, `adrian@nordfit.es` · `nordfit` |
 
 En local: `python3 -m http.server` dentro de esta carpeta y abrir `http://localhost:8000`.
@@ -19,11 +19,12 @@ En local: `python3 -m http.server` dentro de esta carpeta y abrir `http://localh
 ## Reglas que ya aplica
 
 - Bonos de 8 sesiones al mes: 1:1 (360 €), pareja (240 € por persona) y grupo reducido (120 €).
-- 1:1 y pareja reservan huecos libres de su entrenador (pueden ver también los del otro). Grupo reducido reserva plaza en los grupos fijos.
+- Cada cliente tiene un **horario fijo semanal** (lo pone Sergio en su ficha). Sus 8 sesiones del mes se crean solas a partir de él; si un día está cerrado o el entrenador no está, esa sesión no se crea y el cliente puede pedir recuperarla.
+- Para cambiar una sesión concreta, el cliente elige otro hueco libre y envía una **solicitud** a su entrenador, que la acepta o la rechaza desde su panel. Hasta entonces mantiene su sesión original.
 - Las sesiones no se acumulan: lo que no se usa en el mes se pierde.
 - Pago del bono: tarjeta de crédito o débito (Stripe, queda pagado al momento) o transferencia/Bizum (se muestran los datos y el concepto; el cliente reserva ya y el pago queda pendiente hasta que el dueño lo confirma en /admin).
 - Cancelación gratis hasta 24 h antes; después, la sesión se descuenta.
-- No se puede reservar con menos de 2 h de antelación.
+- No se pueden pedir cambios con menos de 2 h de antelación.
 - Bloqueos: cada entrenador bloquea sus días u horas; Sergio puede bloquear a cualquiera o cerrar el estudio entero (festivos). Los clientes no pueden reservar en esos huecos y, si había reservas, se cancelan y vuelven al bono.
 
 ## Pendiente de confirmar con el dueño

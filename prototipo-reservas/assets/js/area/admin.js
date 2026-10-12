@@ -17,8 +17,8 @@
   const me = () => NF.session.admin();
   const isOwner = () => me()?.role === 'owner';
   const NAV = {
-    owner: [['resumen', 'Resumen'], ['agenda', 'Agenda'], ['clientes', 'Clientes'], ['pagos', 'Pagos'], ['calendario', 'Calendario'], ['stats', 'Estadísticas']],
-    trainer: [['hoy', 'Mi día'], ['agenda', 'Mi agenda'], ['calendario', 'Mi calendario']]
+    owner: [['resumen', 'Resumen'], ['solicitudes', 'Solicitudes'], ['agenda', 'Agenda'], ['clientes', 'Clientes'], ['pagos', 'Pagos'], ['calendario', 'Calendario'], ['stats', 'Estadísticas']],
+    trainer: [['hoy', 'Mi día'], ['solicitudes', 'Solicitudes'], ['agenda', 'Mi agenda'], ['calendario', 'Mi calendario']]
   };
   const navEl = document.querySelector('[data-nav]');
   const userEl = document.querySelector('[data-user]');
@@ -28,7 +28,7 @@
     if (s && NAV[s.role]) {
       loginEl.hidden = true; appEl.hidden = false;
       state.trainer = s.role === 'owner' ? 'all' : s.trainer;
-      navBtns = NAV[s.role].map(([v, t]) => h('button', { type: 'button', 'data-view': v, onclick: () => go(v) }, t));
+      navBtns = NAV[s.role].map(([v, t]) => h('button', { type: 'button', 'data-view': v, onclick: () => go(v) }, t, v === 'solicitudes' ? h('span.nav-count', { 'aria-label': 'pendientes' }) : null));
       navEl.replaceChildren(...navBtns);
       userEl.textContent = `${s.name} · ${s.role === 'owner' ? 'dueño' : 'entrenador'}`;
       if (s.role === 'owner') NF.ensureMonth(cur);
@@ -58,11 +58,18 @@
     state.view = view;
     navBtns.forEach(b => b.setAttribute('aria-current', b.dataset.view === view ? 'page' : 'false'));
     main.replaceChildren(views[view]());
+    updateBadge();
     main.focus({ preventScroll: true });
     window.scrollTo(0, 0);
     try { history.replaceState(null, '', '#' + view); } catch (e) { /* file:// */ }
   }
-  const refresh = () => main.replaceChildren(views[state.view]());
+  const refresh = () => { main.replaceChildren(views[state.view]()); updateBadge(); };
+  // Solicitudes que le tocan a quien ha entrado (Sergio, como dueño, ve todas)
+  const myRequests = () => NF.requestsFor(isOwner() ? null : me().trainer);
+  function updateBadge() {
+    const n = myRequests().length;
+    navBtns.forEach(b => { const c = b.querySelector('.nav-count'); if (c) { c.textContent = n || ''; c.hidden = !n; } });
+  }
   window.addEventListener('nf:data', () => { if (me() && !appEl.hidden && !document.querySelector('dialog[open]')) refresh(); });
 
   /* ---------------- Utilidades ---------------- */
@@ -172,6 +179,7 @@
         tile('Clientes activos', String(active.length), planMix(active)),
         tile('Sesiones esta semana', String(weekSessions), `${occ}% de las horas de entrenador ocupadas`)),
       h('div.adm-cols', null,
+        requestsCard(3),
         h('section.card', null,
           h('h2.card__title', null, dayTitle),
           grouped.length ? h('ul.agenda-list', null, grouped.map(g => h('li', null,
@@ -222,6 +230,47 @@
     return avail ? Math.round(sessionsIn(days) / avail * 100) : 0;
   }
 
+  /* Solicitudes de cambio de sesión */
+  const whenShort = x => { const d = NF.parse(x.date); return `${NF.DAYS[d.getDay()].slice(0, 3)} ${d.getDate()} ${NF.MONTHS[d.getMonth()].slice(0, 3)} ${NF.hourLabel(x.h)}`; };
+  function decide(r, ok) {
+    const res = NF.decideRequest(r.id, ok, me().trainer);
+    if (res.error) toast(res.error, 'warn');
+    else toast(ok ? `Cambio aceptado. ${first(NF.client(r.client).name)} lo verá en su área.` : 'Solicitud rechazada.', 'ok');
+    refresh();
+  }
+  function requestRows(list) {
+    return h('ul.due-list', null, list.map(r => {
+      const c = NF.client(r.client);
+      return h('li', null,
+        h('span', null, h('strong', null, c.name),
+          h('small', null, (r.from ? `${whenShort(r.from)} → ${whenShort(r.to)}` : `Recuperar sesión: ${whenShort(r.to)}`) + (isOwner() && r.approver !== me().trainer ? ` · cliente de ${NF.trainer(r.approver).name}` : '')),
+          r.note ? h('small.req-note', null, `«${r.note}»`) : null),
+        h('span.due-list__act', null,
+          h('button.mini-btn', { type: 'button', onclick: () => decide(r, true) }, icon('check'), 'Aceptar'),
+          h('button.mini-btn.mini-btn--danger', { type: 'button', onclick: () => decide(r, false) }, 'Rechazar')));
+    }));
+  }
+  function requestsCard(limit) {
+    const list = myRequests();
+    return h('section.card', null,
+      h('h2.card__title', null, 'Solicitudes de cambio', list.length ? h('span.count', null, String(list.length)) : null),
+      list.length ? requestRows(limit ? list.slice(0, limit) : list) : h('p.muted', null, 'No hay solicitudes pendientes.'),
+      limit && list.length > limit ? h('button.mini-btn', { type: 'button', onclick: () => go('solicitudes') }, `Ver las ${list.length}`) : null);
+  }
+  views.solicitudes = () => {
+    const done = NF.db().requests.filter(r => (r.status === 'accepted' || r.status === 'rejected') && (isOwner() || r.approver === me().trainer))
+      .sort((a, b) => (b.decidedAt || '').localeCompare(a.decidedAt || '')).slice(0, 8);
+    return h('div.view', null,
+      head('Solicitudes', 'de cambio', h('span.muted', null, isOwner() ? 'De todos los clientes' : 'De tus clientes')),
+      h('p.muted', null, 'Cuando un cliente no puede ir a una sesión de su horario fijo, pide otro hueco. Al aceptar, la sesión se mueve y el cliente lo ve en su área. Si rechazas, mantiene su sesión original.'),
+      h('div.adm-cols', null,
+        requestsCard(0),
+        h('section.card', null, h('h2.card__title', null, 'Últimas decisiones'),
+          done.length ? h('ul.due-list', null, done.map(r => h('li', null,
+            h('span', null, h('strong', null, NF.client(r.client).name), h('small', null, r.from ? `${whenShort(r.from)} → ${whenShort(r.to)}` : `Recuperar: ${whenShort(r.to)}`)),
+            r.status === 'accepted' ? status('paid', 'Aceptada') : status('off', 'Rechazada')))) : h('p.muted', null, 'Aún no hay decisiones.'))));
+  };
+
   /* Mi día: inicio para Jules y Adrián */
   views.hoy = () => {
     const tid = me().trainer;
@@ -245,6 +294,7 @@
           grouped.length ? h('ul.agenda-list', null, grouped.map(g => h('li', null,
             h('span.agenda-list__h', null, NF.hourLabel(g.h)),
             h('span', null, h('strong', null, g.label), h('small', null, NF.PLANS[g.kind].name))))) : h('p.muted', null, 'No tienes sesiones reservadas ese día.')),
+        requestsCard(3),
         h('section.card', null,
           h('h2.card__title', null, '¿Vas a faltar?'),
           h('p.muted', null, 'Marca los días u horas en que no estarás y tus clientes no podrán reservar contigo en ese hueco.'),
@@ -367,6 +417,37 @@
         h('thead', null, h('tr', null, ['Nombre', 'Plan', 'Entrenador', `Pago ${NF.monthName(cur)}`, 'Sesiones', 'Suele pagar', 'Teléfono'].map(t => h('th', { scope: 'col' }, t)))),
         h('tbody', null, rows.length ? rows : h('tr', null, h('td', { colspan: '7' }, 'Ningún cliente coincide con la búsqueda.'))))));
   };
+  /* Horario fijo semanal del cliente: días, horas y entrenador (o grupos) */
+  function scheduleEditor(initial, getPlan, getTrainer) {
+    let rows = (initial || []).map(x => Object.assign({}, x));
+    const el = h('div.sched-edit');
+    const hoursFor = dow => { const r = NF.STUDIO[dow] || [7, 21]; return Array.from({ length: r[1] - r[0] + 1 }, (_, i) => r[0] + i); };
+    function render() {
+      const plan = getPlan();
+      el.replaceChildren(h('p.field-label', null, 'Horario fijo semanal'));
+      if (plan === 'grupo') {
+        rows = rows.filter(r => r.group);
+        el.append(h('div.sched-groups', null, NF.db().groups.slice().sort((a, b) => ((a.dow + 6) % 7) - ((b.dow + 6) % 7) || a.h - b.h).map(g => {
+          const n = NF.db().clients.filter(x => x.active && (x.schedule || []).some(s => s.group === g.id)).length;
+          const id = 'sg-' + g.id;
+          return h('label.check', { for: id }, h('input', { type: 'checkbox', id, checked: rows.some(r => r.group === g.id), onchange: e => {
+            rows = e.target.checked ? rows.concat({ dow: g.dow, h: g.h, trainer: g.trainer, group: g.id }) : rows.filter(r => r.group !== g.id);
+          } }), ` ${NF.cap(NF.DAYS[g.dow])} ${NF.hourLabel(g.h)} · ${NF.trainer(g.trainer).name} · ${n}/${g.cap}`);
+        })));
+        return;
+      }
+      rows = rows.filter(r => !r.group);
+      rows.forEach((r, i) => el.append(h('div.sched-row', null,
+        h('select', { 'aria-label': 'Día', onchange: e => { r.dow = +e.target.value; render(); } }, [1, 2, 3, 4, 5, 6].map(d => h('option', { value: d, selected: r.dow === d }, NF.cap(NF.DAYS[d])))),
+        h('select', { 'aria-label': 'Hora', onchange: e => { r.h = +e.target.value; } }, hoursFor(r.dow).map(x => h('option', { value: x, selected: r.h === x }, NF.hourLabel(x)))),
+        h('select', { 'aria-label': 'Entrenador', onchange: e => { r.trainer = e.target.value; } }, NF.TRAINERS.map(t => h('option', { value: t.id, selected: r.trainer === t.id }, t.name))),
+        h('button.mini-btn.mini-btn--danger', { type: 'button', onclick: () => { rows.splice(i, 1); render(); } }, 'Quitar'))));
+      el.append(h('button.mini-btn', { type: 'button', onclick: () => { rows.push({ dow: 1, h: 9, trainer: getTrainer() }); render(); } }, icon('plus'), 'Añadir día'));
+    }
+    render();
+    return { el, render, value: () => rows.map(r => Object.assign({}, r)) };
+  }
+
   function clientModal(c) {
     const isNew = !c;
     c = c || { name: '', email: '', phone: '', plan: 'personal', trainer: 'sergio', method: 'transfer', active: true, notes: '' };
@@ -382,6 +463,9 @@
       h('div', null, sel('method', 'Suele pagar con', Object.entries(NF.METHODS))),
       h('div.span2', null, h('label', { for: 'cf-notes' }, 'Notas (lesiones, objetivos…)'), h('textarea', { id: 'cf-notes', name: 'notes', rows: '3' }, c.notes || '')),
       isNew ? null : h('label.check.span2', null, h('input', { type: 'checkbox', name: 'active', checked: c.active }), ' Cliente activo'));
+    const sched = scheduleEditor(c.schedule, () => f.plan.value, () => f.trainer.value);
+    f.append(h('div.span2', null, sched.el));
+    f.plan.addEventListener('change', () => sched.render());
     let history = null;
     if (!isNew) {
       const pays = NF.db().payments.filter(p => p.client === c.id).sort((a, b) => b.month.localeCompare(a.month)).slice(0, 6);
@@ -409,7 +493,13 @@
       if (NF.db().clients.some(x => x.email.toLowerCase() === email && x.id !== c.id)) { f.email.classList.add('is-error'); toast('Ya hay un cliente con ese email.', 'warn'); return; }
       const data = { name: f.name.value.trim(), email, phone: f.phone.value.trim(), plan: f.plan.value, trainer: f.trainer.value, method: f.method.value, notes: f.notes.value.trim() };
       if (!isNew) { data.id = c.id; data.active = f.active.checked; }
-      NF.saveClient(data);
+      // El hueco de un horario fijo no puede estar ya ocupado por otro cliente
+      const newSched = sched.value();
+      const ids = c.partner ? [c.id, c.partner] : [c.id];
+      const clash = newSched.filter(x => !x.group).map(x => NF.db().clients.find(o => o.active && !ids.includes(o.id) && (o.schedule || []).some(y => !y.group && y.trainer === x.trainer && y.dow === x.dow && y.h === x.h))).find(Boolean);
+      if (clash) { toast(`Ese hueco ya es del horario de ${clash.name}.`, 'warn'); return; }
+      const saved = NF.saveClient(data);
+      if (JSON.stringify(newSched) !== JSON.stringify(c.schedule || [])) NF.setSchedule(saved.id, newSched);
       m.close();
       toast(isNew ? `Cliente creado. Invitación enviada a ${email} (simulado).` : 'Cambios guardados.', 'ok');
       refresh();

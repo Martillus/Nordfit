@@ -473,3 +473,40 @@ body:has(.mbar) .toast { bottom: 96px; }
 .pay__note { font-size: .84rem; color: var(--silver); }
 .pay-actions { display: flex; justify-content: flex-end; align-items: center; gap: 20px; flex-wrap: wrap; }
 @media (max-width: 480px) { .bank-row { grid-template-columns: 1fr; gap: 4px; } }
+
+/* Mi horario: horario fijo, solicitudes y sesiones del día */
+.fixed-row { display: grid; gap: 16px; }
+@media (min-width: 900px) { .fixed-row { grid-template-columns: 1fr 1.2fr; } }
+.fixed { padding: 20px 22px; border-radius: 10px; background: var(--card-l); box-shadow: inset 0 0 0 1px var(--line-light); display: grid; gap: 12px; align-content: start; }
+.fixed h3 { margin: 0; font-family: var(--f-display); font-size: 1rem; }
+.fixed__list, .req-list, .day-sess { list-style: none; margin: 0; padding: 0; display: grid; }
+.fixed__list li { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 10px 0; border-bottom: 1px solid var(--line-light); }
+.fixed__list li span { color: #5d636b; font-size: .9rem; }
+.fixed__note { font-size: .84rem; color: #5d636b; }
+.req-list li { display: flex; justify-content: space-between; align-items: center; gap: 8px 16px; flex-wrap: wrap; padding: 10px 0; border-bottom: 1px solid var(--line-light); }
+.req-list li > span:first-child { display: grid; font-size: .9rem; }
+.req-list small { color: #5d636b; }
+.req-list__st { display: flex; align-items: center; gap: 14px; }
+.notice > div { display: grid; gap: 4px; justify-items: start; }
+.day-sess li { display: grid; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line-light); justify-items: start; }
+.day-sess li > div { display: grid; gap: 2px; }
+.day-sess__req { display: inline-flex; align-items: center; gap: 6px; color: var(--due); font-weight: 600; font-size: .8rem; }
+.day-sess__req .i { width: 13px; height: 13px; }
+.sess__act { display: grid; justify-items: end; gap: 2px; }
+.sess__act .link-btn { padding: 2px 0; }
+.link-btn--quiet { color: #6f757d; font-weight: 500; }
+@media (max-width: 520px) { .sess__act { grid-column: 2; justify-items: start; } }
+.change { margin: 0; display: grid; gap: 8px; }
+.change > div { display: grid; grid-template-columns: 7.5em 1fr; gap: 10px; padding: 10px 14px; border-radius: 8px; background: var(--ink-2); }
+.change dt { color: var(--steel); font-size: .82rem; }
+.change dd { margin: 0; font-weight: 600; }
+
+/* Panel: solicitudes y horario fijo */
+.nav-count { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; margin-left: 8px; border-radius: 999px; background: var(--due-d); color: var(--night); font-size: .7rem; font-weight: 800; vertical-align: 1px; }
+.req-note { font-style: italic; }
+.sched-edit { display: grid; gap: 8px; padding-top: 12px; border-top: 1px solid var(--line-dark); }
+.sched-row { display: grid; grid-template-columns: 1.2fr 1fr 1fr auto; gap: 8px; align-items: center; }
+.sched-row select { padding: 9px 10px; }
+.sched-edit > .mini-btn { justify-self: start; }
+.sched-groups { display: grid; gap: 6px; }
+@media (max-width: 560px) { .sched-row { grid-template-columns: 1fr 1fr; } }
