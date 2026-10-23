@@ -375,7 +375,7 @@ body:has(.mbar) .toast { bottom: 96px; }
 .week td.is-off { background: repeating-linear-gradient(135deg, rgba(207, 212, 219, .035) 0 1px, transparent 1px 8px); }
 .ev { width: 100%; display: grid; gap: 1px; text-align: left; padding: 6px 8px; margin-bottom: 3px; border-radius: 6px; background: var(--ink-2); box-shadow: inset 3px 0 0 var(--silver); line-height: 1.25; transition: background .2s; }
 .ev:hover { background: #283343; }
-.ev--jules { box-shadow: inset 3px 0 0 var(--oak); }
+.ev--veronica { box-shadow: inset 3px 0 0 var(--oak); }
 .ev--grupo { background: rgba(183, 130, 79, .12); }
 .ev__who { font-weight: 600; color: var(--paper); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ev__tr { color: var(--steel); font-size: .72rem; }
@@ -471,6 +471,11 @@ body:has(.mbar) .toast { bottom: 96px; }
 .chip-copy { flex-shrink: 0; font-family: var(--f-display); font-weight: 600; font-size: .72rem; padding: .45em .9em; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--line-dark); color: var(--silver); }
 .chip-copy:hover { background: var(--silver); color: var(--night); }
 .pay__note { font-size: .84rem; color: var(--silver); }
+.pay-way { display: grid; gap: 10px; }
+.pay-way__t { display: flex; align-items: center; gap: 10px; margin: 0; font-family: var(--f-display); font-weight: 700; font-size: 1rem; color: var(--paper); }
+.pay-way__t span { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; font-size: .72rem; background: var(--paper); color: var(--ink); }
+.pay-how { display: grid; gap: 8px; }
+.pay-how > span { font-size: .84rem; color: var(--steel); }
 .pay-actions { display: flex; justify-content: flex-end; align-items: center; gap: 20px; flex-wrap: wrap; }
 @media (max-width: 480px) { .bank-row { grid-template-columns: 1fr; gap: 4px; } }
 

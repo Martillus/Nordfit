@@ -1,8 +1,7 @@
 /* NORDFIT — datos del área de clientes (PROTOTIPO)
    Simula el backend en localStorage con la misma forma que tendrán las tablas
    reales (clientes, reservas, pagos, cierres, grupos). Al pasar a producción,
-   solo cambia este archivo: las funciones públicas se conectan a Supabase y
-   el pago a Stripe Checkout. */
+   solo cambia este archivo: las funciones públicas se conectan a Supabase. */
 window.NF = (() => {
   const KEY = 'nf-demo-v1';
   const SKEY = 'nf-session';
@@ -10,8 +9,8 @@ window.NF = (() => {
   /* ---------------- Catálogo fijo ---------------- */
   const TRAINERS = [
     { id: 'sergio', name: 'Sergio', email: 'sergio@nordfit.es', role: 'owner' },
-    { id: 'jules', name: 'Jules', email: 'jules@nordfit.es', role: 'trainer' },
-    { id: 'adrian', name: 'Adrián', email: 'adrian@nordfit.es', role: 'trainer' }
+    { id: 'veronica', name: 'Verónica', email: 'veronica@nordfit.es', role: 'trainer', title: 'entrenadora' },
+    { id: 'jesus', name: 'Jesús', email: 'jesus@nordfit.es', role: 'trainer' }
   ];
   const PLANS = {
     personal: { id: 'personal', name: 'Personal 1:1', short: '1:1', price: 360, single: 50, sessions: 8 },
@@ -19,8 +18,6 @@ window.NF = (() => {
     grupo: { id: 'grupo', name: 'Grupo reducido', short: 'Grupo', price: 120, single: 25, sessions: 8 }
   };
   const METHODS = {
-    card: 'Tarjeta',
-    sepa: 'Domiciliación',
     cash: 'Efectivo',
     transfer: 'Transferencia',
     bizum: 'Bizum'
@@ -32,8 +29,8 @@ window.NF = (() => {
   // Turnos de cada entrenador (orientativo, editable cuando lo confirme el dueño)
   const SHIFTS = {
     sergio: { 1: [7, 14], 2: [7, 14], 3: [7, 14], 4: [7, 14], 5: [7, 14], 6: [9, 13] },
-    jules: { 1: [14, 21], 2: [14, 21], 3: [14, 21], 4: [14, 21], 5: [14, 21] },
-    adrian: { 1: [9, 16], 2: [9, 16], 3: [9, 16], 4: [9, 16], 5: [9, 16], 6: [9, 13] }
+    veronica: { 1: [14, 21], 2: [14, 21], 3: [14, 21], 4: [14, 21], 5: [14, 21] },
+    jesus: { 1: [9, 16], 2: [9, 16], 3: [9, 16], 4: [9, 16], 5: [9, 16], 6: [9, 13] }
   };
   const CANCEL_HOURS = 24;
   const MIN_LEAD_HOURS = 2;
@@ -67,7 +64,7 @@ window.NF = (() => {
   function db() {
     if (mem) return mem;
     const raw = ls.get(KEY);
-    if (raw) { try { mem = JSON.parse(raw); if (mem.v !== 3) mem = null; } catch (e) { mem = null; } }
+    if (raw) { try { mem = JSON.parse(raw); if (mem.v !== 4) mem = null; } catch (e) { mem = null; } }
     const fresh = !mem;
     if (fresh) mem = seed();
     ensureMonths();
@@ -89,16 +86,16 @@ window.NF = (() => {
     const pick = a => a[Math.floor(rnd() * a.length)];
 
     const people = [
-      ['Lucía Fernández', 'personal', 'sergio'], ['Elías Romero', 'personal', 'jules'], ['Isaac Arroyo', 'personal', 'sergio'],
-      ['Beatriz Díaz', 'personal', 'jules'], ['Marta Gil', 'personal', 'sergio'], ['Pablo Herrera', 'personal', 'jules'],
-      ['Carmen Ortiz', 'personal', 'adrian'], ['Javier Molina', 'personal', 'jules'], ['Nuria Castro', 'personal', 'sergio'],
-      ['Daniel Rubio', 'personal', 'adrian'], ['Alba Navarro', 'personal', 'sergio'], ['Hugo Serrano', 'personal', 'adrian'],
-      ['Sara Prieto', 'pareja', 'jules'], ['Óscar Prieto', 'pareja', 'jules'],
+      ['Lucía Fernández', 'personal', 'sergio'], ['Elías Romero', 'personal', 'veronica'], ['Isaac Arroyo', 'personal', 'sergio'],
+      ['Beatriz Díaz', 'personal', 'veronica'], ['Marta Gil', 'personal', 'sergio'], ['Pablo Herrera', 'personal', 'veronica'],
+      ['Carmen Ortiz', 'personal', 'jesus'], ['Javier Molina', 'personal', 'veronica'], ['Nuria Castro', 'personal', 'sergio'],
+      ['Daniel Rubio', 'personal', 'jesus'], ['Alba Navarro', 'personal', 'sergio'], ['Hugo Serrano', 'personal', 'jesus'],
+      ['Sara Prieto', 'pareja', 'veronica'], ['Óscar Prieto', 'pareja', 'veronica'],
       ['Irene Vidal', 'pareja', 'sergio'], ['Andrés Vidal', 'pareja', 'sergio'],
-      ['Claudia Ramos', 'pareja', 'jules'], ['Teresa Ramos', 'pareja', 'jules'],
-      ['Raúl Medina', 'grupo', 'jules'], ['Paula Iglesias', 'grupo', 'jules'], ['Sofía Cano', 'grupo', 'sergio'],
-      ['Diego Lozano', 'grupo', 'sergio'], ['Laura Pascual', 'grupo', 'jules'], ['Miguel Santos', 'grupo', 'sergio'],
-      ['Elena Vega', 'grupo', 'jules'], ['Rubén León', 'grupo', 'sergio'], ['Inés Calvo', 'grupo', 'jules'],
+      ['Claudia Ramos', 'pareja', 'veronica'], ['Teresa Ramos', 'pareja', 'veronica'],
+      ['Raúl Medina', 'grupo', 'veronica'], ['Paula Iglesias', 'grupo', 'veronica'], ['Sofía Cano', 'grupo', 'sergio'],
+      ['Diego Lozano', 'grupo', 'sergio'], ['Laura Pascual', 'grupo', 'veronica'], ['Miguel Santos', 'grupo', 'sergio'],
+      ['Elena Vega', 'grupo', 'veronica'], ['Rubén León', 'grupo', 'sergio'], ['Inés Calvo', 'grupo', 'veronica'],
       ['Rocío Marín', 'grupo', 'sergio']
     ];
     const now = new Date();
@@ -110,7 +107,7 @@ window.NF = (() => {
         id: 'c' + (i + 1), name, plan, trainer,
         email: i === 0 ? 'lucia@ejemplo.com' : `${slug[0]}.${slug[1]}@ejemplo.com`,
         phone: '6' + String(10000000 + Math.floor(rnd() * 89999999)),
-        method: i === 0 ? 'card' : pick(['cash', 'transfer', 'transfer', 'cash', 'sepa', 'card']),
+        method: i === 0 ? 'bizum' : pick(['cash', 'transfer', 'bizum', 'transfer', 'cash', 'bizum']),
         since: since + '-01', active: true, partner: null,
         notes: ''
       };
@@ -121,11 +118,11 @@ window.NF = (() => {
 
     // Grupos fijos semanales (día, hora, entrenador, plazas)
     const groups = [
-      { id: 'g1', dow: 1, h: 19, trainer: 'jules', cap: 4 },
+      { id: 'g1', dow: 1, h: 19, trainer: 'veronica', cap: 4 },
       { id: 'g2', dow: 2, h: 8, trainer: 'sergio', cap: 4 },
-      { id: 'g3', dow: 3, h: 19, trainer: 'jules', cap: 4 },
+      { id: 'g3', dow: 3, h: 19, trainer: 'veronica', cap: 4 },
       { id: 'g4', dow: 4, h: 8, trainer: 'sergio', cap: 4 },
-      { id: 'g5', dow: 5, h: 18, trainer: 'jules', cap: 4 },
+      { id: 'g5', dow: 5, h: 18, trainer: 'veronica', cap: 4 },
       { id: 'g6', dow: 6, h: 10, trainer: 'sergio', cap: 5 }
     ];
 
@@ -135,13 +132,13 @@ window.NF = (() => {
     [[`${y}-10-12`, 'Fiesta Nacional'], [`${y}-11-01`, 'Todos los Santos'], [`${y}-11-09`, 'Almudena'], [`${y}-12-08`, 'Inmaculada'], [`${y}-12-25`, 'Navidad']]
       .forEach(([date, reason]) => closures.push({ id: uid('x'), date, reason }));
 
-    // Ausencias de ejemplo: un día entero de Sergio y unas horas de Jules
+    // Ausencias de ejemplo: un día entero de Sergio y unas horas de Verónica
     const firstWeekday = (from, dow) => { let d = addDays(from, 1); while (d.getDay() !== dow) d = addDays(d, 1); return ymd(d); };
     const absences = [
       { id: uid('a'), trainer: 'sergio', date: firstWeekday(addDays(now, 5), 5), allDay: true, from: null, to: null, reason: 'Formación' },
-      { id: uid('a'), trainer: 'jules', date: firstWeekday(addDays(now, 2), 3), allDay: false, from: 16, to: 18, reason: 'Médico' }
+      { id: uid('a'), trainer: 'veronica', date: firstWeekday(addDays(now, 2), 3), allDay: false, from: 16, to: 18, reason: 'Médico' }
     ];
-    const data = { v: 3, clients, groups, closures, absences, bookings: [], payments: [], reminders: [] };
+    const data = { v: 4, clients, groups, closures, absences, bookings: [], payments: [], reminders: [] };
 
     // Pagos: últimos 6 meses
     for (let k = -5; k <= 0; k++) {
@@ -259,7 +256,7 @@ window.NF = (() => {
       return s;
     },
     // Prototipo: cada persona del equipo entra con su email; Sergio (dueño) ve
-    // todo, Jules y Adrián solo su agenda y su calendario. En producción son
+    // todo, Verónica y Jesús solo su agenda y su calendario. En producción son
     // cuentas de Supabase con su rol.
     loginAdmin(user, pass) {
       const email = user.trim().toLowerCase() === 'admin@nordfit.es' ? 'sergio@nordfit.es' : user.trim().toLowerCase();
@@ -445,16 +442,14 @@ window.NF = (() => {
     save();
     return b;
   }
-  /* Pago: en producción crea una sesión de Stripe Checkout y el webhook marca
-     el pago como cobrado. "En el estudio" queda pendiente hasta que el dueño
-     lo confirme desde /admin. */
+  /* Pago: Bizum, transferencia o efectivo. El cliente avisa de que ha pagado
+     y queda pendiente hasta que el dueño lo confirma desde /admin. */
   function pay(clientId, month, method) {
     const c = client(clientId);
     let p = payment(clientId, month);
     if (!p) { p = { id: uid('p'), client: clientId, month, amount: PLANS[c.plan].price, status: 'pending', method, paidAt: null }; db().payments.push(p); }
     p.method = method;
-    p.promised = ['cash', 'transfer', 'bizum'].includes(method);
-    if (method === 'card' || method === 'sepa') { p.status = 'paid'; p.paidAt = today(); }
+    p.promised = true;
     save();
     return p;
   }

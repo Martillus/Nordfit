@@ -262,11 +262,9 @@
     });
   }
 
-  /* Pago del bono. Dos caminos:
-     - Tarjeta de crédito o débito → en producción abre Stripe Checkout y el
-       pago queda confirmado al momento.
-     - Transferencia o Bizum → se muestran los datos y el concepto; el cliente
-       reserva ya y el pago queda pendiente hasta que el dueño lo confirma. */
+  /* Pago del bono: solo Bizum y transferencia. Se muestran los dos con sus
+     datos y el concepto; el cliente indica cuál ha usado, sigue reservando y
+     el pago queda pendiente hasta que el dueño lo confirma en /admin. */
   function copyBtn(text) {
     const b = h('button.chip-copy', { type: 'button', onclick: async () => {
       try { await navigator.clipboard.writeText(text); b.textContent = 'Copiado'; } catch (e) { b.textContent = 'Selecciona y copia'; }
@@ -279,56 +277,40 @@
       const c = me();
       const u = NF.usage(c.id, month);
       let result = null;
+      let how = u.payment && u.payment.method === 'transfer' ? 'transfer' : 'bizum';
       const concept = `NORDFIT ${c.name.split(' ')[0]} ${NF.monthName(month)}`.toUpperCase();
-      const summary = h('div.pay__sum', null,
-        h('div', null, h('span', null, `Bono ${plan().name}`), h('small', null, `${NF.cap(NF.monthLabel(month))} · ${u.total} sesiones`)),
-        h('strong', null, NF.money(u.price)));
-      const body = h('div.pay');
+      const row = (label, value, copy) => h('div.bank-row', null, h('dt', null, label), h('dd', null, h('span', null, value), copy ? copyBtn(copy) : null));
+      const body = h('div.pay', null,
+        h('div.pay__sum', null,
+          h('div', null, h('span', null, `Bono ${plan().name}`), h('small', null, `${NF.cap(NF.monthLabel(month))} · ${u.total} sesiones`)),
+          h('strong', null, NF.money(u.price))),
+        h('section.pay-way', null,
+          h('h3.pay-way__t', null, h('span', null, '1'), 'Bizum'),
+          h('dl.bank', null,
+            row('Envía un Bizum a', NF.BANK.bizum, NF.BANK.bizum.replace(/\s/g, '')),
+            row('Importe', NF.money(u.price)),
+            row('Concepto', concept, concept))),
+        h('section.pay-way', null,
+          h('h3.pay-way__t', null, h('span', null, '2'), 'Transferencia bancaria'),
+          h('dl.bank', null,
+            row('Titular', NF.BANK.holder),
+            row('IBAN', NF.BANK.iban, NF.BANK.iban.replace(/\s/g, '')),
+            row('Importe', NF.money(u.price)),
+            row('Concepto', concept, concept))),
+        h('p.pay__note', null, 'Pon el concepto tal cual para que identifiquemos tu pago. Tus reservas quedan hechas y el pago aparece como pendiente hasta que lo comprobemos.'),
+        h('div.pay-how', null,
+          h('span', null, '¿Cómo lo has pagado?'),
+          h('div.choices.choices--dark', { role: 'radiogroup', 'aria-label': 'Cómo has pagado' },
+            [['bizum', 'Bizum'], ['transfer', 'Transferencia']].map(([v, t]) => [
+              h('input', { type: 'radio', name: 'how', id: 'how-' + v, value: v, checked: v === how, onchange: () => { how = v; } }),
+              h('label', { for: 'how-' + v }, t)]))),
+        h('p.pay__proto', null, h('span.tag-proto', null, 'Prototipo'), ' El IBAN y el Bizum son de ejemplo: el dueño pondrá los suyos.'),
+        h('div.pay-actions', null,
+          btn('Ya he hecho el pago', { cls: 'btn--dark', noIcon: true, onclick: () => {
+            NF.pay(c.id, month, how); result = how;
+            toast('Gracias. Lo confirmaremos en cuanto lo recibamos.', 'ok'); m.close();
+          } })));
       const m = modal({ title: 'Pago del bono', body, onClose: () => resolve(result) });
-      const done = (method, msg) => { NF.pay(c.id, month, method); result = method; toast(msg, 'ok'); m.close(); };
-
-      // Paso 1: elegir cómo pagar
-      const choose = () => body.replaceChildren(summary,
-        h('div.pay-choices', null,
-          h('button.pay-choice', { type: 'button', onclick: card },
-            h('span.pay-choice__t', null, 'Tarjeta de crédito o débito'),
-            h('span.pay-choice__d', null, 'Visa, Mastercard, Apple Pay o Google Pay. Queda pagado al momento.'),
-            icon('right', 'pay-choice__ic')),
-          h('button.pay-choice', { type: 'button', onclick: transfer },
-            h('span.pay-choice__t', null, 'Transferencia bancaria o Bizum'),
-            h('span.pay-choice__d', null, 'Te damos los datos. Reservas ya y lo confirmamos al recibirlo.'),
-            icon('right', 'pay-choice__ic'))),
-        h('p.pay__proto', null, h('span.tag-proto', null, 'Prototipo'), ' No se cobra nada.'));
-
-      // Tarjeta: en producción, redirección a Stripe Checkout
-      function card() {
-        body.replaceChildren(summary,
-          h('div.pay-wait', null, h('span.pay-spin', { 'aria-hidden': 'true' }), h('p', null, 'Abriendo la pasarela segura de Stripe…')),
-          h('p.pay__proto', null, h('span.tag-proto', null, 'Prototipo'), ' En la versión real se abre la página de pago de Stripe. Los datos de la tarjeta nunca pasan por la web de Nordfit.'));
-        setTimeout(() => done('card', `Pago de ${NF.money(u.price)} completado.`), 1400);
-      }
-
-      // Transferencia o Bizum: datos para pagar y aviso de que ya está hecho
-      function transfer() {
-        let how = 'bizum';
-        const row = (label, value, copy) => h('div.bank-row', null, h('dt', null, label), h('dd', null, h('span', null, value), copy ? copyBtn(copy) : null));
-        const tabs = h('div.choices.choices--dark', { role: 'radiogroup', 'aria-label': 'Cómo vas a pagar' },
-          [['bizum', 'Bizum'], ['transfer', 'Transferencia']].map(([v, t]) => [
-            h('input', { type: 'radio', name: 'how', id: 'how-' + v, value: v, checked: v === how, onchange: () => { how = v; paint(); } }),
-            h('label', { for: 'how-' + v }, t)]));
-        const data = h('dl.bank');
-        const paint = () => data.replaceChildren(...(how === 'bizum'
-          ? [row('Envía un Bizum a', NF.BANK.bizum, NF.BANK.bizum.replace(/\s/g, '')), row('Importe', NF.money(u.price)), row('Concepto', concept, concept)]
-          : [row('Titular', NF.BANK.holder), row('IBAN', NF.BANK.iban, NF.BANK.iban.replace(/\s/g, '')), row('Importe', NF.money(u.price)), row('Concepto', concept, concept)]));
-        paint();
-        body.replaceChildren(summary, tabs, data,
-          h('p.pay__note', null, 'Pon el concepto tal cual para que identifiquemos tu pago. Tus reservas quedan hechas y el pago aparece como pendiente hasta que lo comprobemos.'),
-          h('p.pay__proto', null, h('span.tag-proto', null, 'Prototipo'), ' El IBAN es de ejemplo: el dueño pondrá el suyo.'),
-          h('div.pay-actions', null,
-            h('button.link-btn', { type: 'button', onclick: choose }, 'Volver'),
-            btn('Ya he hecho el pago', { cls: 'btn--dark', noIcon: true, onclick: () => done(how, 'Gracias. Lo confirmaremos en cuanto lo recibamos.') })));
-      }
-      choose();
     });
   }
 
@@ -399,18 +381,17 @@
         h('div.bill__top', null, h('span.kicker', null, m === cur ? 'Este mes' : 'Próximo mes'), st),
         h('h3.display', null, NF.monthName(m)),
         h('p.bill__amt', null, h('b', null, u.price), h('span', null, ' € · ' + plan().name)),
-        u.paid ? null : btn(u.promised ? 'Pagar con tarjeta' : 'Pagar bono', { cls: 'btn--dark', onclick: async () => { if (await payModal(m)) renderAll(); } }));
+        u.paid ? null : btn(u.promised ? 'Ver datos de pago' : 'Pagar bono', { cls: 'btn--dark', onclick: async () => { if (await payModal(m)) renderAll(); } }));
     });
     const row = p => h('tr', null,
       h('td', null, NF.cap(NF.monthLabel(p.month))),
       h('td', null, NF.money(p.amount)),
       h('td', null, NF.METHODS[p.method] || '—'),
       h('td', null, p.status === 'paid' ? status('paid', 'Pagado') : status('pending', 'Pendiente')),
-      h('td', null, p.status === 'paid' ? h('button.link-btn', { type: 'button', onclick: () => toast('En la versión real, el recibo se descarga en PDF desde Stripe.') }, 'Recibo') : '—'));
+      h('td', null, p.status === 'paid' ? h('button.link-btn', { type: 'button', onclick: () => toast('En la versión real, el recibo se descarga en PDF.') }, 'Recibo') : '—'));
     panel.replaceChildren(
       h('div.panel__head', null, h('h2.display.h-sm', null, 'Tus ', h('span.thin', null, 'pagos'))),
       h('div.bills', null, cards),
-      c.method === 'sepa' ? h('div.notice', null, icon('check'), h('p', null, h('strong', null, 'Domiciliación activa. '), 'Tu bono se cobra automáticamente el día 1 de cada mes.')) : '',
       h('h3.sub', null, 'Historial'),
       h('div.table-wrap', null, h('table.tbl', null,
         h('thead', null, h('tr', null, ['Mes', 'Importe', 'Forma de pago', 'Estado', ''].map(t => h('th', { scope: 'col' }, t)))),

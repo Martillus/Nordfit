@@ -12,7 +12,7 @@
   const state = { view: 'resumen', week: monday(new Date()), trainer: 'all', payMonth: cur, calMonth: cur, q: '', plan: 'all' };
 
   /* ---------------- Acceso ----------------
-     Sergio (dueño) ve todo el panel. Jules y Adrián, solo su día, su agenda
+     Sergio (dueño) ve todo el panel. Verónica y Jesús, solo su día, su agenda
      y su calendario para bloquear días u horas. */
   const me = () => NF.session.admin();
   const isOwner = () => me()?.role === 'owner';
@@ -30,7 +30,7 @@
       state.trainer = s.role === 'owner' ? 'all' : s.trainer;
       navBtns = NAV[s.role].map(([v, t]) => h('button', { type: 'button', 'data-view': v, onclick: () => go(v) }, t, v === 'solicitudes' ? h('span.nav-count', { 'aria-label': 'pendientes' }) : null));
       navEl.replaceChildren(...navBtns);
-      userEl.textContent = `${s.name} · ${s.role === 'owner' ? 'dueño' : 'entrenador'}`;
+      userEl.textContent = `${s.name} · ${s.role === 'owner' ? 'dueño' : NF.trainer(s.trainer).title || 'entrenador'}`;
       if (s.role === 'owner') NF.ensureMonth(cur);
       go((location.hash || '').slice(1));
     } else {
@@ -105,7 +105,7 @@
       radio('ep-st', 'paid', 'Pagado', f.status === 'paid', () => { f.status = 'paid'; sync(); }),
       radio('ep-st', 'pending', 'Pendiente', f.status === 'pending', () => { f.status = 'pending'; sync(); }));
     const methodGroup = h('div.choices.choices--dark', { role: 'radiogroup', 'aria-labelledby': 'ep-m-l' },
-      ['cash', 'transfer', 'bizum', 'card', 'sepa'].map(v => radio('ep-m', v, NF.METHODS[v], f.method === v, () => { f.method = v; })));
+      ['bizum', 'transfer', 'cash'].map(v => radio('ep-m', v, NF.METHODS[v], f.method === v, () => { f.method = v; })));
     const date = h('input', { id: 'ep-date', type: 'date', value: p.paidAt || NF.today(), max: NF.today() });
     const amount = h('input', { id: 'ep-amt', type: 'number', min: '0', step: '1', value: p.amount, inputmode: 'numeric' });
     const note = h('input', { id: 'ep-note', value: p.note || '', maxlength: '80', placeholder: 'Ej.: en mano a Sergio, descuento por lesión…' });
@@ -271,7 +271,7 @@
             r.status === 'accepted' ? status('paid', 'Aceptada') : status('off', 'Rechazada')))) : h('p.muted', null, 'Aún no hay decisiones.'))));
   };
 
-  /* Mi día: inicio para Jules y Adrián */
+  /* Mi día: inicio para Verónica y Jesús */
   views.hoy = () => {
     const tid = me().trainer;
     const today = NF.today();
@@ -542,7 +542,7 @@
       h('div.tiles', null,
         tile('Cobrado', NF.money(sum(paid)), `${paid.length} pagos`),
         tile('Pendiente', NF.money(sum(pending)), `${pending.length} clientes`, pending.length ? '.tile--warn' : ''),
-        tile('Por forma de pago', byMethod.length ? byMethod.map(([k, v]) => `${NF.METHODS[k]} ${NF.money(v)}`).join(' · ') : '—', 'Con Stripe, tarjeta y domiciliación se concilian solas', '.tile--text')),
+        tile('Por forma de pago', byMethod.length ? byMethod.map(([k, v]) => `${NF.METHODS[k]} ${NF.money(v)}`).join(' · ') : '—', 'Bizum y transferencia se confirman en Pagos', '.tile--text')),
       h('div.toolbar', null,
         missing ? h('button.mini-btn', { type: 'button', onclick: () => { const n = NF.ensureMonth(m); toast(`${n} cargos creados para ${NF.monthName(m)}.`, 'ok'); refresh(); } }, icon('plus'), `Crear cargos del mes (${missing})`) : null,
         h('button.mini-btn', { type: 'button', onclick: csv, disabled: !pays.length }, 'Exportar CSV para la gestoría'),
@@ -677,7 +677,7 @@
   }
   function groupModal(g) {
     const isNew = !g;
-    g = g || { dow: 1, h: 19, trainer: 'jules', cap: 4 };
+    g = g || { dow: 1, h: 19, trainer: 'veronica', cap: 4 };
     const dow = h('select', { id: 'g-d' }, [1, 2, 3, 4, 5, 6].map(d => h('option', { value: d, selected: g.dow === d }, NF.DAYS[d])));
     const hr = h('select', { id: 'g-h' }, Array.from({ length: 15 }, (_, i) => i + 7).map(x => h('option', { value: x, selected: g.h === x }, NF.hourLabel(x))));
     const tr = h('select', { id: 'g-t' }, NF.TRAINERS.map(t => h('option', { value: t.id, selected: g.trainer === t.id }, t.name)));
